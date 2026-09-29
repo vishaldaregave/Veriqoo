@@ -1,0 +1,1 @@
+"""LegalMetrologyAI backend package."""
