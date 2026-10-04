@@ -141,6 +141,22 @@ class InspectionRepository(abc.ABC):
         """Persist observed inspection facts in Phase 3A runtime tables."""
         pass
 
+    def get_ocr_observations(self, inspection_id: str) -> list[dict[str, Any]]:
+        """Retrieve persisted raw OCR observations."""
+        return []
+
+    def get_evidence(self, inspection_id: str) -> list[dict[str, Any]]:
+        """Retrieve persisted extracted evidence candidates."""
+        return []
+
+    def get_requirement_results(self, inspection_id: str) -> list[dict[str, Any]]:
+        """Retrieve persisted requirement results."""
+        return []
+
+    def get_applicability_facts(self, inspection_id: str) -> list[InspectionFact]:
+        """Retrieve persisted inspection facts."""
+        return []
+
     @abc.abstractmethod
     def save_share(self, share: ReportShare) -> None:
         """Persist or update a report share record."""
@@ -348,6 +364,26 @@ class InMemoryInspectionRepository(InspectionRepository):
         with self._lock:
             self.get_inspection(inspection_id)
             self._facts[inspection_id] = list(facts)
+
+    def get_ocr_observations(self, inspection_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            self.get_inspection(inspection_id)
+            return list(self._ocr_obs.get(inspection_id, []))
+
+    def get_evidence(self, inspection_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            self.get_inspection(inspection_id)
+            return list(self._evidence.get(inspection_id, []))
+
+    def get_requirement_results(self, inspection_id: str) -> list[dict[str, Any]]:
+        with self._lock:
+            self.get_inspection(inspection_id)
+            return list(self._req_results.get(inspection_id, []))
+
+    def get_applicability_facts(self, inspection_id: str) -> list[InspectionFact]:
+        with self._lock:
+            self.get_inspection(inspection_id)
+            return list(self._facts.get(inspection_id, []))
 
     def save_share(self, share: ReportShare) -> None:
         with self._lock:

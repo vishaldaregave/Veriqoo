@@ -675,5 +675,170 @@ class AuthorityCaseInputResponse(BaseModel):
     submitted_at: str = Field(..., description="Submission timestamp in ISO-8601 format")
 
 
+# =====================================================================
+# Offline Inspection & Sync Schemas (Phase U24)
+# =====================================================================
+
+class SyncOperationRequest(BaseModel):
+    """Atomic mutation operation submitted by offline client."""
+    operation_id: str = Field(..., description="Unique UUID for this sync operation")
+    inspection_id: str = Field(..., description="Target inspection identifier")
+    entity_type: str = Field(..., description="Entity category (INSPECTION, IMAGE, OCR_OBSERVATION, EVIDENCE, FACT, APPLICABILITY, REQUIREMENT_RESULT, REPORT)")
+    entity_id: str = Field(..., description="Target entity identifier")
+    operation_type: str = Field(default="CREATE", description="Operation mutation verb (CREATE, UPSERT)")
+    content_hash: str = Field(..., description="SHA-256 digest of canonical JSON payload")
+    created_at: str = Field(..., description="Client creation ISO timestamp")
+    sequence: int = Field(default=1, description="Ordering sequence")
+    dependency_ids: list[str] = Field(default_factory=list, description="Operation IDs this operation depends on")
+    payload: dict[str, Any] = Field(default_factory=dict, description="Entity payload data")
+
+
+class SyncBatchRequest(BaseModel):
+    """Batch of offline operations submitted for synchronization."""
+    inspection_id: str = Field(..., description="Target inspection session identifier")
+    batch_id: str | None = Field(default=None, description="Optional client-generated batch identifier")
+    client_metadata: dict[str, Any] = Field(default_factory=dict, description="Client telemetry metadata")
+    operations: list[SyncOperationRequest] = Field(..., description="List of sync operations (1 to 100)")
+
+
+class SyncAcknowledgementResponse(BaseModel):
+    """Per-operation server receipt and status acknowledgement."""
+    operation_id: str = Field(..., description="Operation identifier")
+    entity_id: str = Field(..., description="Target entity identifier")
+    status: str = Field(..., description="Receipt status (ACKNOWLEDGED, ALREADY_APPLIED, REJECTED, RETRYABLE_FAILURE)")
+    server_timestamp: str = Field(..., description="Server timestamp of acknowledgement in ISO format")
+    server_version: str | None = Field(default="1.0.0", description="Server API version")
+    error_code: str | None = Field(default=None, description="Machine-readable error code if rejected or pending")
+    error_message: str | None = Field(default=None, description="Diagnostic error message")
+
+
+class SyncBatchResponse(BaseModel):
+    """Response containing acknowledgements for all submitted operations in a batch."""
+    inspection_id: str = Field(..., description="Target inspection identifier")
+    batch_id: str | None = Field(default=None, description="Batch identifier")
+    results: list[SyncAcknowledgementResponse] = Field(default_factory=list, description="Per-operation acknowledgement receipts")
+
+
+class SyncManifestResponse(BaseModel):
+    """Authoritative synchronization manifest describing the current inspection state."""
+    inspection_id: str = Field(..., description="Inspection identifier")
+    lifecycle_status: str = Field(..., description="Domain inspection lifecycle status (COLLECTING, READY, RUNNING, COMPLETED, FAILED)")
+    sync_status: str = Field(..., description="Overall sync status (DRAFT_LOCAL, SYNC_PENDING, SYNCING, SYNCED, SYNC_FAILED, REVALIDATION_REQUIRED, REVALIDATED)")
+    entity_acknowledgements: list[SyncAcknowledgementResponse] = Field(default_factory=list, description="All acknowledged entity receipts")
+    image_hashes: dict[str, str] = Field(default_factory=dict, description="Map of image_id to normalized/source hash")
+    legal_snapshot_id: str | None = Field(default=None, description="Active or declared legal snapshot identity")
+    evaluation_metadata: dict[str, Any] | None = Field(default=None, description="Evaluation provenance metadata")
+    last_synced_at: str | None = Field(default=None, description="Latest server synchronization timestamp")
+
+
+# =====================================================================
+# Phase U24-F: Server Revalidation Response Schemas
+# =====================================================================
+
+class RevalidationComparisonResponse(BaseModel):
+    """Structured diff and diagnostic comparison between offline and server evaluations."""
+    offline_overall_status: str | None = Field(default=None, description="Original offline compliance status")
+    server_overall_status: str = Field(..., description="Authoritative server revalidated compliance status")
+    overall_status_changed: bool = Field(default=False, description="Whether the overall verdict changed")
+    offline_legal_snapshot_id: str | None = Field(default=None, description="Snapshot ID used by offline device")
+    server_legal_snapshot_id: str = Field(..., description="Snapshot ID used by server revalidation")
+    legal_snapshot_changed: bool = Field(default=False, description="Whether snapshot migrated to newer version")
+    snapshot_validation_status: str = Field(default="MATCHED", description="Snapshot validation classification (MATCHED, STALE, UNKNOWN)")
+    offline_requirement_count: int = Field(default=0, description="Number of requirements evaluated offline")
+    server_requirement_count: int = Field(default=0, description="Authoritative count of statutory requirements")
+    missing_offline_requirements: list[str] = Field(default_factory=list, description="Statutory requirements omitted by mobile client")
+    extra_offline_requirements: list[str] = Field(default_factory=list, description="Unrecognized requirements submitted by mobile client")
+    requirement_status_diffs: list[dict[str, Any]] = Field(default_factory=list, description="Per-requirement status differences")
+    applicability_changed: bool = Field(default=False, description="Whether applicability rules changed")
+    summary_notes: list[str] = Field(default_factory=list, description="Diagnostic summary notes explaining differences")
+
+
+class ServerRevalidationResponse(BaseModel):
+    """Authoritative API response for server revalidation of offline inspections."""
+    inspection_id: str = Field(..., description="Inspection identifier")
+    overall_status: str = Field(..., description="Authoritative overall compliance status (PASS, FAIL, REVIEW_REQUIRED)")
+    verification_results: list[dict[str, Any]] = Field(default_factory=list, description="Deterministic requirement verification results")
+    summary: str = Field(..., description="Authoritative compliance summary text")
+    counts: dict[str, int] = Field(default_factory=dict, description="Breakdown counts of requirement statuses")
+    applicable_requirements: list[str] = Field(default_factory=list, description="Complete authoritative applicable requirement IDs")
+    server_legal_snapshot_id: str = Field(..., description="Active server legal snapshot identifier")
+    offline_legal_snapshot_id: str | None = Field(default=None, description="Original offline legal snapshot identifier")
+    evaluation_metadata: dict[str, Any] = Field(default_factory=dict, description="Server evaluation provenance metadata")
+    comparison: RevalidationComparisonResponse = Field(..., description="Structured comparison with offline evaluation")
+    evidence_annotations: list[dict[str, Any]] = Field(default_factory=list, description="Evidence bounding box highlight overlays")
+    revalidated_at: str = Field(..., description="Server revalidation timestamp in ISO-8601 format")
+    content_hash: str | None = Field(default=None, description="Deterministic SHA-256 result payload digest")
+
+
+# =====================================================================
+# Phase U25: Evidence Trust / Chain of Custody Schemas
+# =====================================================================
+
+class EvidenceRecordResponse(BaseModel):
+    """Canonical cryptographic evidence identity record."""
+    evidence_id: str = Field(..., description="Unique canonical evidence identifier")
+    inspection_id: str = Field(..., description="Associated inspection identifier")
+    image_id: str | None = Field(default=None, description="Image storage key if applicable")
+    source_id: str | None = Field(default=None, description="Source entity ID if applicable")
+    content_hash: str = Field(..., description="Deterministic SHA-256 digest of exact original bytes")
+    hash_algorithm: str = Field(default="SHA-256", description="Cryptographic hash algorithm")
+    byte_size: int = Field(..., description="Exact raw byte size of original evidence")
+    media_type: str = Field(default="image/jpeg", description="MIME content type")
+    original_filename: str | None = Field(default=None, description="Original filename if captured")
+    storage_reference: str | None = Field(default=None, description="Durable object storage URI or path")
+    captured_at: str | None = Field(default=None, description="Device capture timestamp in ISO format")
+    received_at: str = Field(..., description="Server receipt timestamp in ISO format")
+    created_at: str = Field(..., description="Record creation timestamp in ISO format")
+    submitted_by: str | None = Field(default=None, description="Authenticated submitter user ID or client identifier")
+    source_type: str = Field(default="UPLOAD", description="Evidence ingestion source (UPLOAD, SYNC, CAMERA, CONSUMER)")
+    integrity_status: str = Field(default="VERIFIED", description="Evidence integrity state (VERIFIED, UNVERIFIED, MISSING, HASH_MISMATCH, CORRUPTED, REVIEW_REQUIRED)")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Immutable evidence provenance metadata")
+
+
+class EvidenceChainEventResponse(BaseModel):
+    """Append-oriented tamper-evident event in the evidence provenance chain."""
+    event_id: str = Field(..., description="Unique event identifier")
+    evidence_id: str = Field(..., description="Associated evidence identifier")
+    inspection_id: str = Field(..., description="Associated inspection identifier")
+    event_type: str = Field(..., description="Event lifecycle type")
+    actor_type: str = Field(..., description="Actor category (SYSTEM, USER, INSPECTOR, OCR_ENGINE, REVALIDATION)")
+    actor_id: str | None = Field(default=None, description="Actor subject identity if authenticated")
+    timestamp: str = Field(..., description="Immutable event timestamp in ISO format")
+    previous_event_hash: str | None = Field(default=None, description="SHA-256 digest of previous chain event (null for genesis)")
+    event_hash: str = Field(..., description="Deterministic SHA-256 hash of this event record")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Structured canonical metadata")
+    operation_id: str | None = Field(default=None, description="Originating idempotent operation identifier")
+
+
+class EvidenceIntegrityResponse(BaseModel):
+    """Structured cryptographic integrity verification receipt."""
+    evidence_id: str = Field(..., description="Evidence identifier")
+    inspection_id: str = Field(..., description="Inspection identifier")
+    integrity_status: str = Field(..., description="Verified integrity state (VERIFIED, UNVERIFIED, MISSING, HASH_MISMATCH, CORRUPTED, REVIEW_REQUIRED)")
+    content_hash: str = Field(..., description="Recorded original content SHA-256 hash")
+    content_hash_valid: bool = Field(..., description="Whether stored or retrieved bytes match the recorded content hash")
+    chain_valid: bool = Field(..., description="Whether all chain events form an unbroken tamper-evident cryptographic sequence")
+    event_count: int = Field(..., description="Total provenance events in chain")
+    first_event_at: str | None = Field(default=None, description="Timestamp of genesis event")
+    last_event_at: str | None = Field(default=None, description="Timestamp of most recent event")
+    broken_event_id: str | None = Field(default=None, description="Identifier of first broken/tampered event if any")
+    error_codes: list[str] = Field(default_factory=list, description="Diagnostic error codes if verification failed")
+    verified_at: str = Field(..., description="Timestamp of verification execution")
+    details: dict[str, Any] = Field(default_factory=dict, description="Additional verification telemetry and diagnostics")
+
+
+class InspectionEvidenceSummaryResponse(BaseModel):
+    """Comprehensive evidence summary and chain verification for an inspection."""
+    inspection_id: str = Field(..., description="Inspection identifier")
+    evidence_count: int = Field(..., description="Total evidence records associated with this inspection")
+    verified_evidence_count: int = Field(..., description="Number of evidence records with VERIFIED integrity status")
+    unverified_evidence_count: int = Field(..., description="Number of evidence records unverified or pending")
+    integrity_warning_count: int = Field(..., description="Number of evidence records with hash mismatch or corruption warnings")
+    chain_verification_status: str = Field(..., description="Overall chain verification verdict (VERIFIED, WARNING, BROKEN, EMPTY)")
+    items: list[EvidenceRecordResponse] = Field(default_factory=list, description="List of canonical evidence records")
+
+
+
+
 
 

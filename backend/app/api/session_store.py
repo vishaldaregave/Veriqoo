@@ -94,6 +94,13 @@ class InMemoryInspectionStore:
                 )
             return self._sessions[inspection_id]
 
+    def get_session_optional(self, inspection_id: str) -> InspectionSession | None:
+        """Retrieve an inspection session by ID, returning None if missing."""
+        with self._lock:
+            if not inspection_id:
+                return None
+            return self._sessions.get(inspection_id)
+
     def list_sessions(self) -> list[InspectionSession]:
         """List all active in-memory inspection sessions."""
         with self._lock:

@@ -298,6 +298,91 @@ def get_consumer_report_service(
     )
 
 
+_GLOBAL_SYNC_OPERATION_REPO: Any = None
+
+
+def get_sync_operation_repository():
+    """Provide SyncOperationRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_SYNC_OPERATION_REPO
+    from backend.app.services.offline_sync.repository import (
+        InMemorySyncOperationRepository,
+        SupabaseSyncOperationRepository,
+    )
+
+    if _GLOBAL_SYNC_OPERATION_REPO is None:
+        settings = get_settings()
+        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
+            _GLOBAL_SYNC_OPERATION_REPO = SupabaseSyncOperationRepository(settings=settings)
+        else:
+            _GLOBAL_SYNC_OPERATION_REPO = InMemorySyncOperationRepository()
+    return _GLOBAL_SYNC_OPERATION_REPO
+
+
+def get_sync_ingestion_service(
+    sync_repo: Any = Depends(get_sync_operation_repository),
+    inspection_repo: Any = Depends(get_inspection_repository),
+    settings: Settings = Depends(get_app_settings),
+):
+    """Provide SyncIngestionService coordinator for Phase U24."""
+    from backend.app.services.offline_sync.ingestion import SyncIngestionService
+
+    return SyncIngestionService(
+        sync_repository=sync_repo,
+        inspection_repository=inspection_repo,
+        server_version=settings.app_version,
+    )
+
+
+def get_server_revalidation_service(
+    sync_repo: Any = Depends(get_sync_operation_repository),
+    inspection_repo: Any = Depends(get_inspection_repository),
+    store: InMemoryInspectionStore = Depends(get_session_store),
+):
+    """Provide ServerRevalidationService coordinator for Phase U24-F/G."""
+    from backend.app.services.offline_sync.revalidation import ServerRevalidationService
+
+    return ServerRevalidationService(
+        sync_repository=sync_repo,
+        inspection_repository=inspection_repo,
+        session_store=store,
+    )
+
+
+_GLOBAL_EVIDENCE_CHAIN_REPO: Any = None
+
+
+def get_evidence_chain_repository():
+    """Provide EvidenceChainRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_EVIDENCE_CHAIN_REPO
+    from backend.app.services.evidence_chain.repository import (
+        InMemoryEvidenceChainRepository,
+        SupabaseEvidenceChainRepository,
+    )
+
+    if _GLOBAL_EVIDENCE_CHAIN_REPO is None:
+        settings = get_settings()
+        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
+            _GLOBAL_EVIDENCE_CHAIN_REPO = SupabaseEvidenceChainRepository(settings=settings)
+        else:
+            _GLOBAL_EVIDENCE_CHAIN_REPO = InMemoryEvidenceChainRepository()
+    return _GLOBAL_EVIDENCE_CHAIN_REPO
+
+
+def get_evidence_chain_service(
+    evidence_repo: Any = Depends(get_evidence_chain_repository),
+    storage: Any = Depends(get_image_storage),
+):
+    """Provide EvidenceChainService coordinator for Phase U25."""
+    from backend.app.services.evidence_chain.service import EvidenceChainService
+
+    return EvidenceChainService(
+        repository=evidence_repo,
+        storage=storage,
+    )
+
+
+
+
 
 
 
