@@ -19,9 +19,13 @@ from backend.app.api.errors import (
     unsupported_image_handler,
     validation_exception_handler,
 )
+from backend.app.api.v1.endpoints.authority import router as authority_router
+from backend.app.api.v1.endpoints.consumer_issues import router as consumer_issues_router
 from backend.app.api.v1.endpoints.health import router as health_router
 from backend.app.api.v1.endpoints.inspections import router as inspections_router
+from backend.app.api.v1.endpoints.saved_products import router as saved_products_router
 from backend.app.api.v1.endpoints.telegram_link import router as telegram_link_router
+from backend.app.api.v1.endpoints.users import router as users_router
 from backend.app.config import get_settings
 from backend.app.services.evidence.errors import (
     ImageDecodeError,
@@ -92,10 +96,14 @@ def create_app() -> FastAPI:
     # Register Routers
     # Root health endpoint
     app.include_router(health_router)
-    # v1 health and inspections endpoints
+    # v1 health, inspections, telegram, users, and saved products endpoints
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(inspections_router, prefix="/api/v1")
     app.include_router(telegram_link_router, prefix="/api/v1")
+    app.include_router(users_router, prefix="/api/v1")
+    app.include_router(saved_products_router, prefix="/api/v1")
+    app.include_router(consumer_issues_router, prefix="/api/v1")
+    app.include_router(authority_router, prefix="/api/v1")
 
     return app
 

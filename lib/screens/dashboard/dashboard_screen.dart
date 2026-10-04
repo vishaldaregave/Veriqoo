@@ -330,6 +330,10 @@ class _TopBar extends StatelessWidget {
             onTap: () => Navigator.of(context).pushReplacementNamed('/dashboard'),
           ),
           _Nav(
+            label: 'Authority Cases',
+            onTap: () => Navigator.of(context).pushReplacementNamed('/authority/cases'),
+          ),
+          _Nav(
             label: 'Products',
             onTap: () => Navigator.of(context).pushReplacementNamed('/products'),
           ),

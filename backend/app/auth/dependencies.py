@@ -62,3 +62,10 @@ async def get_current_user(
                 "details": auth_err.details,
             },
         )
+
+
+def get_require_authority_user():
+    """Lazily import require_authority_user to prevent circular imports."""
+    from backend.app.services.authority.dependencies import require_authority_user
+    return require_authority_user
+

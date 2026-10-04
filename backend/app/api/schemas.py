@@ -61,6 +61,14 @@ class InspectionResponse(BaseModel):
     owner_id: str | None = Field(default=None, description="Authenticated owner identity (UUID)")
 
 
+class InspectionListResponse(BaseModel):
+    """Paginated list response for user inspection history."""
+    items: list[InspectionResponse] = Field(default_factory=list)
+    total: int = Field(..., description="Total count of matching inspections")
+    limit: int = Field(..., description="Pagination limit")
+    offset: int = Field(..., description="Pagination offset")
+
+
 class RunInspectionRequest(BaseModel):
     """Parameters passed when triggering the end-to-end inspection pipeline."""
     inspection_facts: list[dict[str, Any]] = Field(

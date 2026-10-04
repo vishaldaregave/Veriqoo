@@ -89,6 +89,23 @@ class InMemoryInspectionStore:
         with self._lock:
             return list(self._sessions.values())
 
+    def list_sessions_by_owner(
+        self,
+        owner_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[InspectionSession], int]:
+        """List active inspection sessions owned by specific user with reverse-chronological ordering and pagination."""
+        with self._lock:
+            matched = [
+                s for s in self._sessions.values()
+                if s.inspection.owner_id == owner_id or s.inspection.metadata.get("owner_id") == owner_id
+            ]
+            matched.sort(key=lambda s: s.inspection.created_at, reverse=True)
+            total = len(matched)
+            paginated = matched[offset : offset + limit]
+            return paginated, total
+
     def add_artifact(
         self,
         inspection_id: str,

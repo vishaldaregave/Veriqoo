@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Generator
+from fastapi import Depends
 
 from backend.app.api.session_store import InMemoryInspectionStore
 from backend.app.auth import AuthenticatedUser, get_current_user
@@ -110,6 +111,221 @@ def get_account_linking_service():
 
     repo = get_account_link_repository()
     return AccountLinkingService(repository=repo)
+
+
+_GLOBAL_USER_PROFILE_REPO: Any = None
+
+
+def get_user_profile_repository():
+    """Provide UserProfileRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_USER_PROFILE_REPO
+    from backend.app.services.user_profile.repository import (
+        InMemoryUserProfileRepository,
+        SupabaseUserProfileRepository,
+    )
+
+    if _GLOBAL_USER_PROFILE_REPO is None:
+        settings = get_settings()
+        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
+            _GLOBAL_USER_PROFILE_REPO = SupabaseUserProfileRepository(settings=settings)
+        else:
+            _GLOBAL_USER_PROFILE_REPO = InMemoryUserProfileRepository()
+    return _GLOBAL_USER_PROFILE_REPO
+
+
+def get_user_profile_service(
+    repository: Any = Depends(get_user_profile_repository),
+):
+    """Provide UserProfileService coordinator."""
+    from backend.app.services.user_profile.service import UserProfileService
+
+    return UserProfileService(repository=repository)
+
+
+_GLOBAL_SAVED_PRODUCT_REPO: Any = None
+
+
+def get_saved_product_repository():
+    """Provide SavedProductRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_SAVED_PRODUCT_REPO
+    from backend.app.services.saved_products.repository import (
+        InMemorySavedProductRepository,
+        SupabaseSavedProductRepository,
+    )
+
+    if _GLOBAL_SAVED_PRODUCT_REPO is None:
+        settings = get_settings()
+        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
+            _GLOBAL_SAVED_PRODUCT_REPO = SupabaseSavedProductRepository(settings=settings)
+        else:
+            _GLOBAL_SAVED_PRODUCT_REPO = InMemorySavedProductRepository()
+    return _GLOBAL_SAVED_PRODUCT_REPO
+
+
+def get_saved_product_service(
+    repository: Any = Depends(get_saved_product_repository),
+    session_store: Any = Depends(get_session_store),
+):
+    """Provide SavedProductService coordinator."""
+    from backend.app.services.saved_products.service import SavedProductService
+
+    return SavedProductService(repository=repository, session_store=session_store)
+
+
+_GLOBAL_CONSUMER_ISSUE_REPO: Any = None
+
+
+def get_consumer_issue_repository():
+    """Provide ConsumerIssueRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_CONSUMER_ISSUE_REPO
+    from backend.app.services.consumer_issues.repository import (
+        InMemoryConsumerIssueRepository,
+        SupabaseConsumerIssueRepository,
+    )
+
+    if _GLOBAL_CONSUMER_ISSUE_REPO is None:
+        settings = get_settings()
+        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
+            _GLOBAL_CONSUMER_ISSUE_REPO = SupabaseConsumerIssueRepository(settings=settings)
+        else:
+            _GLOBAL_CONSUMER_ISSUE_REPO = InMemoryConsumerIssueRepository()
+    return _GLOBAL_CONSUMER_ISSUE_REPO
+
+
+_GLOBAL_LOCATION_REGISTRY: Any = None
+
+
+def get_verified_location_registry():
+    """Provide authoritative ServerVerifiedLocationRegistry."""
+    global _GLOBAL_LOCATION_REGISTRY
+    from backend.app.services.consumer_issues.jurisdiction import ServerVerifiedLocationRegistry
+
+    if _GLOBAL_LOCATION_REGISTRY is None:
+        _GLOBAL_LOCATION_REGISTRY = ServerVerifiedLocationRegistry()
+    return _GLOBAL_LOCATION_REGISTRY
+
+
+def get_trusted_jurisdiction_resolver(
+    registry: Any = Depends(get_verified_location_registry),
+):
+    """Provide DefaultTrustedJurisdictionResolver coordinator."""
+    from backend.app.services.consumer_issues.jurisdiction import DefaultTrustedJurisdictionResolver
+
+    return DefaultTrustedJurisdictionResolver(registry=registry)
+
+
+def get_consumer_issue_service(
+    repository: Any = Depends(get_consumer_issue_repository),
+    session_store: Any = Depends(get_session_store),
+    saved_product_repository: Any = Depends(get_saved_product_repository),
+    jurisdiction_resolver: Any = Depends(get_trusted_jurisdiction_resolver),
+):
+    """Provide ConsumerIssueService coordinator."""
+    from backend.app.services.consumer_issues.service import ConsumerIssueService
+
+    return ConsumerIssueService(
+        repository=repository,
+        session_store=session_store,
+        saved_product_repository=saved_product_repository,
+        jurisdiction_resolver=jurisdiction_resolver,
+    )
+
+
+_GLOBAL_AUTHORITY_REPO: Any = None
+
+
+def get_authority_repository():
+    """Provide AuthorityRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_AUTHORITY_REPO
+    from backend.app.services.authority.repository import (
+        InMemoryAuthorityRepository,
+        SupabaseAuthorityRepository,
+    )
+
+    if _GLOBAL_AUTHORITY_REPO is None:
+        settings = get_settings()
+        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
+            _GLOBAL_AUTHORITY_REPO = SupabaseAuthorityRepository(settings=settings)
+        else:
+            _GLOBAL_AUTHORITY_REPO = InMemoryAuthorityRepository()
+    return _GLOBAL_AUTHORITY_REPO
+
+
+def get_authority_service(
+    repository: Any = Depends(get_authority_repository),
+):
+    """Provide AuthorityService coordinator."""
+    from backend.app.services.authority.service import AuthorityService
+
+    return AuthorityService(repository=repository)
+
+
+_GLOBAL_AUTHORITY_CASE_REPO: Any = None
+
+
+def get_authority_case_repository():
+    """Provide AuthorityCaseRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_AUTHORITY_CASE_REPO
+    from backend.app.services.authority.case_repository import (
+        InMemoryAuthorityCaseRepository,
+        SupabaseAuthorityCaseRepository,
+    )
+
+    if _GLOBAL_AUTHORITY_CASE_REPO is None:
+        settings = get_settings()
+        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
+            _GLOBAL_AUTHORITY_CASE_REPO = SupabaseAuthorityCaseRepository(settings=settings)
+        else:
+            _GLOBAL_AUTHORITY_CASE_REPO = InMemoryAuthorityCaseRepository()
+    return _GLOBAL_AUTHORITY_CASE_REPO
+
+
+_GLOBAL_ESTABLISHMENT_REPO: Any = None
+
+
+def get_establishment_repository():
+    """Provide EstablishmentRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_ESTABLISHMENT_REPO
+    from backend.app.services.establishment.repository import (
+        InMemoryEstablishmentRepository,
+        SupabaseEstablishmentRepository,
+    )
+
+    if _GLOBAL_ESTABLISHMENT_REPO is None:
+        settings = get_settings()
+        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
+            _GLOBAL_ESTABLISHMENT_REPO = SupabaseEstablishmentRepository(settings=settings)
+        else:
+            _GLOBAL_ESTABLISHMENT_REPO = InMemoryEstablishmentRepository()
+    return _GLOBAL_ESTABLISHMENT_REPO
+
+
+def get_establishment_service(
+    repository: Any = Depends(get_establishment_repository),
+):
+    """Provide EstablishmentService coordinator."""
+    from backend.app.services.establishment.service import EstablishmentService
+
+    return EstablishmentService(repository=repository)
+
+
+def get_authority_case_service(
+    case_repository: Any = Depends(get_authority_case_repository),
+    authority_repository: Any = Depends(get_authority_repository),
+    establishment_repository: Any = Depends(get_establishment_repository),
+):
+    """Provide AuthorityCaseService coordinator."""
+    from backend.app.services.authority.case_service import AuthorityCaseService
+
+    return AuthorityCaseService(
+        case_repository=case_repository,
+        authority_repository=authority_repository,
+        establishment_repository=establishment_repository,
+    )
+
+
+
+
 
 
 
