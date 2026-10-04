@@ -1,0 +1,36 @@
+# ==============================================================================
+# Veriqoo — Legal Metrology Inspection AI Dependencies
+# ==============================================================================
+
+# FastAPI & ASGI Server
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.6
+python-multipart>=0.0.9
+
+# Data Models & Environment Configuration
+pydantic>=2.10.0
+pydantic-settings>=2.15.0
+python-dotenv>=1.0.0
+
+# Cryptography & Authentication (Supabase Auth JWT)
+PyJWT>=2.10.0
+cryptography>=44.0.0
+
+# Database & Cloud Services
+supabase>=2.10.0
+httpx>=0.28.0
+requests>=2.32.0
+
+# Multimodal AI & Google Gemini
+google-genai>=2.20.0
+
+# OCR & Computer Vision Pipeline
+paddleocr>=2.9.0
+paddlepaddle>=3.0.0
+pillow>=11.0.0
+
+# Telegram Bot Integration
+python-telegram-bot>=21.0
+
+# Legal Document Processing
+pypdf>=5.0.0
