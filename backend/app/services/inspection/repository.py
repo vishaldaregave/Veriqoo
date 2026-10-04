@@ -17,6 +17,11 @@ import requests
 
 from backend.app.config import Settings, get_settings
 from backend.app.services.applicability.models import InspectionFact
+from backend.app.services.consumer_report.models import (
+    ConsumerReport,
+    ConsumerReportStatus,
+    ReportFindingPackage,
+)
 from backend.app.services.evidence.models import EvidenceCandidate, ImageArtifact
 from backend.app.services.inspection.errors import (
     ImageNotFoundInInspectionError,
@@ -33,6 +38,7 @@ from backend.app.services.inspection.models import (
 from backend.app.services.inspection_pipeline.models import OverallInspectionStatus
 from backend.app.services.inspection_pipeline.report import InspectionReport
 from backend.app.services.ocr.models import OCRResult
+from backend.app.services.report_sharing.models import ReportShare
 from backend.app.services.verification.models import VerificationResult, VerificationStatus
 
 
@@ -135,6 +141,56 @@ class InspectionRepository(abc.ABC):
         """Persist observed inspection facts in Phase 3A runtime tables."""
         pass
 
+    @abc.abstractmethod
+    def save_share(self, share: ReportShare) -> None:
+        """Persist or update a report share record."""
+        pass
+
+    @abc.abstractmethod
+    def get_share(self, share_id: str) -> ReportShare | None:
+        """Retrieve a report share record by ID."""
+        pass
+
+    @abc.abstractmethod
+    def get_share_by_token_hash(self, token_hash: str) -> ReportShare | None:
+        """Retrieve a report share record by token hash."""
+        pass
+
+    @abc.abstractmethod
+    def list_shares(self, inspection_id: str) -> list[ReportShare]:
+        """List all report share records for an inspection."""
+        pass
+
+    @abc.abstractmethod
+    def revoke_share(self, share_id: str) -> ReportShare | None:
+        """Revoke a report share record by ID."""
+        pass
+
+    @abc.abstractmethod
+    def save_consumer_report(self, report: ConsumerReport) -> None:
+        """Persist or update an authoritative consumer report record."""
+        pass
+
+    @abc.abstractmethod
+    def get_consumer_report(self, report_id: str) -> ConsumerReport | None:
+        """Retrieve a consumer report by report_id."""
+        pass
+
+    @abc.abstractmethod
+    def get_consumer_report_by_inspection(self, inspection_id: str, user_id: str) -> ConsumerReport | None:
+        """Retrieve an existing consumer report by inspection ID and user ID."""
+        pass
+
+    @abc.abstractmethod
+    def list_consumer_reports_for_user(self, user_id: str) -> list[ConsumerReport]:
+        """List all consumer reports submitted by a specific user."""
+        pass
+
+    @abc.abstractmethod
+    def list_all_consumer_reports(self) -> list[ConsumerReport]:
+        """List all consumer reports across all users for regulatory review."""
+        pass
+
 
 class InMemoryInspectionRepository(InspectionRepository):
     """Thread-safe in-memory repository for unit testing without network/DB dependencies."""
@@ -148,6 +204,10 @@ class InMemoryInspectionRepository(InspectionRepository):
         self._evidence: dict[str, list[dict[str, Any]]] = {}
         self._req_results: dict[str, list[dict[str, Any]]] = {}
         self._facts: dict[str, list[InspectionFact]] = {}
+        self._shares: dict[str, ReportShare] = {}
+        self._shares_by_hash: dict[str, str] = {}
+        self._consumer_reports: dict[str, ConsumerReport] = {}
+        self._consumer_reports_by_key: dict[tuple[str, str], str] = {}
 
     def create_inspection(
         self,
@@ -289,6 +349,61 @@ class InMemoryInspectionRepository(InspectionRepository):
             self.get_inspection(inspection_id)
             self._facts[inspection_id] = list(facts)
 
+    def save_share(self, share: ReportShare) -> None:
+        with self._lock:
+            self.get_inspection(share.inspection_id)
+            self._shares[share.id] = share
+            if share.token_hash:
+                self._shares_by_hash[share.token_hash] = share.id
+
+    def get_share(self, share_id: str) -> ReportShare | None:
+        with self._lock:
+            return self._shares.get(share_id)
+
+    def get_share_by_token_hash(self, token_hash: str) -> ReportShare | None:
+        with self._lock:
+            share_id = self._shares_by_hash.get(token_hash)
+            if share_id:
+                return self._shares.get(share_id)
+            return None
+
+    def list_shares(self, inspection_id: str) -> list[ReportShare]:
+        with self._lock:
+            self.get_inspection(inspection_id)
+            return [s for s in self._shares.values() if s.inspection_id == inspection_id]
+
+    def revoke_share(self, share_id: str) -> ReportShare | None:
+        with self._lock:
+            share = self._shares.get(share_id)
+            if share is not None and share.revoked_at is None:
+                share.revoked_at = datetime.now(timezone.utc)
+            return share
+
+    def save_consumer_report(self, report: ConsumerReport) -> None:
+        with self._lock:
+            self._consumer_reports[report.report_id] = report
+            if report.inspection_id and report.submitted_by:
+                self._consumer_reports_by_key[(report.inspection_id, report.submitted_by)] = report.report_id
+
+    def get_consumer_report(self, report_id: str) -> ConsumerReport | None:
+        with self._lock:
+            return self._consumer_reports.get(report_id)
+
+    def get_consumer_report_by_inspection(self, inspection_id: str, user_id: str) -> ConsumerReport | None:
+        with self._lock:
+            rep_id = self._consumer_reports_by_key.get((inspection_id, user_id))
+            if rep_id:
+                return self._consumer_reports.get(rep_id)
+            return None
+
+    def list_consumer_reports_for_user(self, user_id: str) -> list[ConsumerReport]:
+        with self._lock:
+            return [r for r in self._consumer_reports.values() if r.submitted_by == user_id]
+
+    def list_all_consumer_reports(self) -> list[ConsumerReport]:
+        with self._lock:
+            return list(self._consumer_reports.values())
+
     def clear(self) -> None:
         with self._lock:
             self._inspections.clear()
@@ -298,6 +413,10 @@ class InMemoryInspectionRepository(InspectionRepository):
             self._evidence.clear()
             self._req_results.clear()
             self._facts.clear()
+            self._shares.clear()
+            self._shares_by_hash.clear()
+            self._consumer_reports.clear()
+            self._consumer_reports_by_key.clear()
 
 
 class SupabaseInspectionRepository(InspectionRepository):
@@ -595,6 +714,11 @@ class SupabaseInspectionRepository(InspectionRepository):
             )
         counts = payload.get("counts", {})
         created_at_dt = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+        from backend.app.services.inspection_pipeline.annotations import EvidenceAnnotation
+        evidence_annotations = [
+            EvidenceAnnotation.from_dict(a) if isinstance(a, dict) else a
+            for a in payload.get("evidence_annotations", [])
+        ]
         return InspectionReport(
             inspection_id=inspection_id,
             overall_status=OverallInspectionStatus(row["overall_status"]),
@@ -608,6 +732,7 @@ class SupabaseInspectionRepository(InspectionRepository):
             not_visible_count=int(counts.get("not_visible_count", 0)),
             not_applicable_count=int(counts.get("not_applicable_count", 0)),
             review_required_count=int(counts.get("review_required_count", 0)),
+            evidence_annotations=evidence_annotations,
             created_at=created_at_dt,
             errors=list(payload.get("errors", [])),
             metadata=dict(payload.get("metadata", {})),
@@ -731,3 +856,205 @@ class SupabaseInspectionRepository(InspectionRepository):
         if fact_rows:
             self._request("post", "inspection_facts", json=fact_rows)
 
+    def save_share(self, share: ReportShare) -> None:
+        payload = {
+            "id": share.id,
+            "inspection_id": share.inspection_id,
+            "token_hash": share.token_hash,
+            "created_at": share.created_at.isoformat(),
+            "expires_at": share.expires_at.isoformat() if share.expires_at else None,
+            "revoked_at": share.revoked_at.isoformat() if share.revoked_at else None,
+            "created_by": share.created_by,
+            "metadata": share.metadata,
+        }
+        self._request(
+            "post",
+            "inspection_report_shares",
+            params={"on_conflict": "id"},
+            headers=self._headers(prefer="resolution=merge-duplicates,return=minimal"),
+            json=payload,
+        )
+
+    def get_share(self, share_id: str) -> ReportShare | None:
+        rows = self._request("get", "inspection_report_shares", params={"id": f"eq.{share_id}"})
+        if not rows:
+            return None
+        r = rows[0]
+        return ReportShare(
+            id=r["id"],
+            inspection_id=r["inspection_id"],
+            token_hash=r["token_hash"],
+            created_at=datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")),
+            expires_at=datetime.fromisoformat(r["expires_at"].replace("Z", "+00:00")) if r.get("expires_at") else None,
+            revoked_at=datetime.fromisoformat(r["revoked_at"].replace("Z", "+00:00")) if r.get("revoked_at") else None,
+            created_by=r.get("created_by"),
+            metadata=r.get("metadata", {}),
+        )
+
+    def get_share_by_token_hash(self, token_hash: str) -> ReportShare | None:
+        rows = self._request("get", "inspection_report_shares", params={"token_hash": f"eq.{token_hash}"})
+        if not rows:
+            return None
+        r = rows[0]
+        return ReportShare(
+            id=r["id"],
+            inspection_id=r["inspection_id"],
+            token_hash=r["token_hash"],
+            created_at=datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")),
+            expires_at=datetime.fromisoformat(r["expires_at"].replace("Z", "+00:00")) if r.get("expires_at") else None,
+            revoked_at=datetime.fromisoformat(r["revoked_at"].replace("Z", "+00:00")) if r.get("revoked_at") else None,
+            created_by=r.get("created_by"),
+            metadata=r.get("metadata", {}),
+        )
+
+    def list_shares(self, inspection_id: str) -> list[ReportShare]:
+        rows = self._request("get", "inspection_report_shares", params={"inspection_id": f"eq.{inspection_id}", "order": "created_at.desc"})
+        shares = []
+        for r in rows:
+            shares.append(ReportShare(
+                id=r["id"],
+                inspection_id=r["inspection_id"],
+                token_hash=r["token_hash"],
+                created_at=datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")),
+                expires_at=datetime.fromisoformat(r["expires_at"].replace("Z", "+00:00")) if r.get("expires_at") else None,
+                revoked_at=datetime.fromisoformat(r["revoked_at"].replace("Z", "+00:00")) if r.get("revoked_at") else None,
+                created_by=r.get("created_by"),
+                metadata=r.get("metadata", {}),
+            ))
+        return shares
+
+    def revoke_share(self, share_id: str) -> ReportShare | None:
+        now_str = datetime.now(timezone.utc).isoformat()
+        rows = self._request(
+            "patch",
+            "inspection_report_shares",
+            params={"id": f"eq.{share_id}"},
+            headers=self._headers(prefer="return=representation"),
+            json={"revoked_at": now_str},
+        )
+        if not rows:
+            return None
+        r = rows[0]
+        return ReportShare(
+            id=r["id"],
+            inspection_id=r["inspection_id"],
+            token_hash=r["token_hash"],
+            created_at=datetime.fromisoformat(r["created_at"].replace("Z", "+00:00")),
+            expires_at=datetime.fromisoformat(r["expires_at"].replace("Z", "+00:00")) if r.get("expires_at") else None,
+            revoked_at=datetime.fromisoformat(r["revoked_at"].replace("Z", "+00:00")) if r.get("revoked_at") else None,
+            created_by=r.get("created_by"),
+            metadata=r.get("metadata", {}),
+        )
+
+    def _row_to_consumer_report(self, row: dict[str, Any]) -> ConsumerReport:
+        findings_raw = row.get("findings", [])
+        findings: list[ReportFindingPackage] = []
+        if isinstance(findings_raw, list):
+            for f in findings_raw:
+                if isinstance(f, dict):
+                    findings.append(ReportFindingPackage(
+                        finding_id=f.get("finding_id", ""),
+                        requirement_id=f.get("requirement_id", ""),
+                        canonical_status=f.get("canonical_status", "FAIL"),
+                        consumer_title=f.get("consumer_title", ""),
+                        consumer_explanation=f.get("consumer_explanation", ""),
+                        severity=f.get("severity", "HIGH"),
+                        rule_number=f.get("rule_number"),
+                        statutory_label=f.get("statutory_label"),
+                        section_reference=f.get("section_reference"),
+                        evidence_ids=list(f.get("evidence_ids", [])),
+                        observation_ids=list(f.get("observation_ids", [])),
+                        annotation_ids=list(f.get("annotation_ids", [])),
+                        image_ids=list(f.get("image_ids", [])),
+                        annotations=list(f.get("annotations", [])),
+                    ))
+
+        status_str = row.get("status", "SUBMITTED")
+        try:
+            status_enum = ConsumerReportStatus(status_str)
+        except Exception:
+            status_enum = ConsumerReportStatus.SUBMITTED
+
+        return ConsumerReport(
+            report_id=row["report_id"],
+            inspection_id=str(row["inspection_id"]),
+            submitted_by=str(row["user_id"]),
+            status=status_enum,
+            canonical_overall_status=row.get("canonical_overall_status", "FAIL"),
+            consumer_overall_result=row.get("consumer_overall_result", "COMPLIANCE_ISSUE_DETECTED"),
+            consumer_description=row.get("consumer_description"),
+            product_summary=dict(row.get("product_summary", {})),
+            identity_confidence=row.get("identity_confidence", "UNKNOWN"),
+            scan_quality=dict(row.get("scan_quality", {})),
+            findings=findings,
+            priority_score=int(row.get("priority_score", 0)),
+            priority_band=row.get("priority_band", "MEDIUM"),
+            priority_reasons=list(row.get("priority_reasons", [])),
+            risk_signals=list(row.get("risk_signals", [])),
+            location=row.get("location"),
+            inspection_created_at=row.get("inspection_created_at", ""),
+            created_at=row.get("created_at", ""),
+            metadata=dict(row.get("metadata", {})),
+        )
+
+    def save_consumer_report(self, report: ConsumerReport) -> None:
+        payload = {
+            "report_id": report.report_id,
+            "inspection_id": report.inspection_id,
+            "user_id": report.submitted_by,
+            "status": report.status.value if hasattr(report.status, "value") else str(report.status),
+            "canonical_overall_status": report.canonical_overall_status,
+            "consumer_overall_result": report.consumer_overall_result,
+            "consumer_description": report.consumer_description,
+            "product_summary": report.product_summary,
+            "identity_confidence": report.identity_confidence,
+            "scan_quality": report.scan_quality,
+            "findings": [f.to_dict() for f in report.findings],
+            "priority_score": report.priority_score,
+            "priority_band": report.priority_band,
+            "priority_reasons": report.priority_reasons,
+            "risk_signals": report.risk_signals,
+            "location": report.location,
+            "inspection_created_at": report.inspection_created_at or None,
+            "report_snapshot": report.to_dict(),
+            "metadata": report.metadata,
+        }
+        self._request(
+            "post",
+            "consumer_reports",
+            params={"on_conflict": "report_id"},
+            headers=self._headers(prefer="resolution=merge-duplicates,return=minimal"),
+            json=payload,
+        )
+
+    def get_consumer_report(self, report_id: str) -> ConsumerReport | None:
+        rows = self._request("get", "consumer_reports", params={"report_id": f"eq.{report_id}", "limit": "1"})
+        if not rows:
+            return None
+        return self._row_to_consumer_report(rows[0])
+
+    def get_consumer_report_by_inspection(self, inspection_id: str, user_id: str) -> ConsumerReport | None:
+        rows = self._request(
+            "get",
+            "consumer_reports",
+            params={"inspection_id": f"eq.{inspection_id}", "user_id": f"eq.{user_id}", "limit": "1"},
+        )
+        if not rows:
+            return None
+        return self._row_to_consumer_report(rows[0])
+
+    def list_consumer_reports_for_user(self, user_id: str) -> list[ConsumerReport]:
+        rows = self._request(
+            "get",
+            "consumer_reports",
+            params={"user_id": f"eq.{user_id}", "order": "created_at.desc"},
+        )
+        return [self._row_to_consumer_report(r) for r in rows]
+
+    def list_all_consumer_reports(self) -> list[ConsumerReport]:
+        rows = self._request(
+            "get",
+            "consumer_reports",
+            params={"order": "created_at.desc"},
+        )
+        return [self._row_to_consumer_report(r) for r in rows]

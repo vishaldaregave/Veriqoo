@@ -4,26 +4,44 @@ from datetime import datetime, timezone
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, UploadFile, status
 
 from backend.app.api.dependencies import (
+    get_consumer_intelligence_service,
+    get_consumer_report_service,
+    get_consumer_result_service,
     get_ingestion_service,
     get_pipeline_orchestrator,
+    get_report_sharing_service,
     get_session_store,
 )
 from backend.app.api.errors import ErrorCode, create_error_response
 from backend.app.api.schemas import (
+    ConsumerComplianceResultResponse,
+    ConsumerReportResponse,
+    ConsumerScanIntelligenceResponse,
+    CreateConsumerReportRequest,
     CreateInspectionRequest,
+    CreateShareRequest,
+    CreateShareResponse,
     ImageUploadResponse,
     InspectionImageResponse,
     InspectionReportResponse,
     InspectionResponse,
+    QRPayloadResponse,
+    RevokeShareResponse,
     RunInspectionRequest,
     RunInspectionResponse,
 )
 from backend.app.api.session_store import InMemoryInspectionStore, InspectionSession
 from backend.app.auth import AuthenticatedUser, get_current_user
 from backend.app.services.applicability.models import InspectionFact
+from backend.app.services.consumer_intelligence import ConsumerIntelligenceService
+from backend.app.services.consumer_report import (
+    ConsumerReportEligibility,
+    ConsumerReportService,
+)
+from backend.app.services.consumer_result import ConsumerResultService
 from backend.app.services.evidence.errors import InvalidImageError
 from backend.app.services.evidence.ingestion import ImageIngestionService
 from backend.app.services.inspection.errors import InvalidInspectionError
@@ -31,6 +49,12 @@ from backend.app.services.inspection.models import InspectionStatus
 from backend.app.services.inspection_pipeline.errors import (
     InvalidPipelineInputError,
     PipelineError,
+)
+from backend.app.services.report_sharing import (
+    ReportShareError,
+    ReportSharePermissionError,
+    ReportShareStateError,
+    ReportSharingService,
 )
 from backend.app.services.inspection_pipeline.models import InspectionPipelineRequest
 from backend.app.services.inspection_pipeline.orchestrator import InspectionPipelineOrchestrator
@@ -285,10 +309,12 @@ def run_inspection(
     "/{inspection_id}/report",
     response_model=InspectionReportResponse,
     summary="Get Inspection Report",
-    description="Retrieve the latest inspection verification report.",
+    description="Retrieve the latest inspection verification report in the requested or negotiated language.",
 )
 def get_report(
     inspection_id: str,
+    lang: str | None = None,
+    accept_language: str | None = Header(default=None, alias="Accept-Language"),
     store: InMemoryInspectionStore = Depends(get_session_store),
     current_user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, Any]:
@@ -320,4 +346,287 @@ def get_report(
             },
         )
 
-    return report.to_dict()
+    # Negotiate language according to cascading precedence
+    from backend.app.localization.service import get_localization_service
+    loc = get_localization_service()
+    user_claims = current_user.claims if hasattr(current_user, "claims") else None
+    target_lang = loc.resolve_language(
+        explicit_lang=lang,
+        inspection_meta=session.inspection.metadata,
+        user_claims=user_claims,
+        accept_language_header=accept_language,
+    )
+
+    return report.to_dict(lang=target_lang.value)
+
+
+@router.post(
+    "/{inspection_id}/share",
+    response_model=CreateShareResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Shareable Inspection Report QR Reference",
+    description="Generate a secure, high-entropy, opaque report share token and QR URL for a completed inspection.",
+)
+def create_share(
+    inspection_id: str,
+    request: CreateShareRequest | None = None,
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    sharing_service: ReportSharingService = Depends(get_report_sharing_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> CreateShareResponse:
+    """Create a share reference and QR payload for an inspection owned by the caller."""
+    session = store.get_session(inspection_id)
+    _verify_inspection_ownership(session, current_user, inspection_id)
+
+    if session.inspection.is_failed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": ErrorCode.INVALID_INSPECTION_STATE.value,
+                "message": f"Cannot share failed inspection '{inspection_id}'.",
+                "details": {"inspection_id": inspection_id},
+            },
+        )
+
+    if session.inspection.status != InspectionStatus.COMPLETED or session.report is None:
+        status_str = session.inspection.status.value
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": ErrorCode.INVALID_INSPECTION_STATE.value,
+                "message": f"Cannot share inspection in state '{status_str}'. Inspection must be COMPLETED with an existing report.",
+                "details": {"inspection_id": inspection_id, "status": status_str},
+            },
+        )
+
+    expires_in = request.expires_in_seconds if request else None
+    meta = request.metadata if request else {}
+
+    try:
+        share, raw_token, qr_payload = sharing_service.create_share(
+            inspection_id=inspection_id,
+            created_by=current_user.user_id,
+            expires_in_seconds=expires_in,
+            metadata=meta,
+        )
+    except ReportSharePermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": ErrorCode.INSPECTION_NOT_FOUND.value,
+                "message": f"Inspection with ID '{inspection_id}' not found.",
+                "details": {"inspection_id": inspection_id},
+            },
+        )
+    except ReportShareStateError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": ErrorCode.INVALID_INSPECTION_STATE.value,
+                "message": e.message,
+                "details": e.details,
+            },
+        )
+
+    return CreateShareResponse(
+        share_id=share.id,
+        inspection_id=share.inspection_id,
+        qr=QRPayloadResponse(
+            url=qr_payload.url,
+            token_id=qr_payload.token_id,
+            format=qr_payload.format,
+            version=qr_payload.version,
+        ),
+        created_at=share.created_at.isoformat(),
+        expires_at=share.expires_at.isoformat() if share.expires_at else None,
+        status=share.status().value,
+    )
+
+
+@router.post(
+    "/{inspection_id}/share/{share_id}/revoke",
+    response_model=RevokeShareResponse,
+    summary="Revoke Report Share",
+    description="Immediately revoke an active share reference and its associated QR access.",
+)
+def revoke_share(
+    inspection_id: str,
+    share_id: str,
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    sharing_service: ReportSharingService = Depends(get_report_sharing_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> RevokeShareResponse:
+    """Revoke an active report share owned by the caller."""
+    session = store.get_session(inspection_id)
+    _verify_inspection_ownership(session, current_user, inspection_id)
+
+    try:
+        share = sharing_service.revoke_share(
+            inspection_id=inspection_id,
+            share_id=share_id,
+            current_user_id=current_user.user_id,
+        )
+    except ReportSharePermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": ErrorCode.INSPECTION_NOT_FOUND.value,
+                "message": f"Inspection with ID '{inspection_id}' not found.",
+                "details": {"inspection_id": inspection_id},
+            },
+        )
+    except ReportShareError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "SHARE_NOT_FOUND",
+                "message": e.message,
+                "details": e.details,
+            },
+        )
+
+    revoked_at_str = share.revoked_at.isoformat() if share.revoked_at else datetime.now(timezone.utc).isoformat()
+    return RevokeShareResponse(
+        share_id=share.id,
+        inspection_id=share.inspection_id,
+        status="REVOKED",
+        revoked_at=revoked_at_str,
+    )
+
+
+@router.get(
+    "/{inspection_id}/consumer-intelligence",
+    response_model=ConsumerScanIntelligenceResponse,
+    summary="Get Consumer Scan Intelligence",
+    description="Retrieve structured product identity, scan quality diagnostics, consumer risk classification, and guidance actions for a completed inspection.",
+)
+def get_consumer_intelligence(
+    inspection_id: str,
+    lang: str | None = None,
+    selling_price: float | None = None,
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    intelligence_service: ConsumerIntelligenceService = Depends(get_consumer_intelligence_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Retrieve consumer scan intelligence for an inspection session owned by the caller."""
+    session = store.get_session(inspection_id)
+    _verify_inspection_ownership(session, current_user, inspection_id)
+
+    if session.inspection.is_failed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": ErrorCode.INVALID_INSPECTION_STATE.value,
+                "message": f"Cannot generate consumer intelligence for failed inspection '{inspection_id}'.",
+                "details": {"inspection_id": inspection_id},
+            },
+        )
+
+    if session.inspection.status != InspectionStatus.COMPLETED or session.report is None:
+        status_str = session.inspection.status.value
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": ErrorCode.INVALID_INSPECTION_STATE.value,
+                "message": f"Cannot generate consumer intelligence for inspection in state '{status_str}'. Inspection must be COMPLETED with an existing report.",
+                "details": {"inspection_id": inspection_id, "status": status_str},
+            },
+        )
+
+    intelligence = intelligence_service.generate_intelligence(
+        inspection_id=inspection_id,
+        lang=lang,
+        user_selling_price=selling_price,
+    )
+    return intelligence.to_dict()
+
+
+@router.get(
+    "/{inspection_id}/consumer-result",
+    response_model=ConsumerComplianceResultResponse,
+    summary="Get Consumer Compliance Result & Explanation",
+    description="Retrieve consumer-oriented compliance result, plain-language explanations, findings, score, limitations, and actions.",
+)
+def get_consumer_result(
+    inspection_id: str,
+    lang: str | None = None,
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    result_service: ConsumerResultService = Depends(get_consumer_result_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Retrieve consumer compliance result and explanation for an inspection session owned by the caller."""
+    session = store.get_session(inspection_id)
+    _verify_inspection_ownership(session, current_user, inspection_id)
+
+    if session.inspection.is_failed:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": ErrorCode.INVALID_INSPECTION_STATE.value,
+                "message": f"Cannot generate consumer result for failed inspection '{inspection_id}'.",
+                "details": {"inspection_id": inspection_id},
+            },
+        )
+
+    if session.inspection.status != InspectionStatus.COMPLETED or session.report is None:
+        status_str = session.inspection.status.value
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": ErrorCode.INVALID_INSPECTION_STATE.value,
+                "message": f"Cannot generate consumer result for inspection in state '{status_str}'. Inspection must be COMPLETED with an existing report.",
+                "details": {"inspection_id": inspection_id, "status": status_str},
+            },
+        )
+
+    result = result_service.generate_consumer_result(
+        inspection_id=inspection_id,
+        lang=lang,
+    )
+    return result.to_dict()
+
+
+@router.post(
+    "/{inspection_id}/consumer-reports",
+    response_model=ConsumerReportResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit Consumer Authority Report",
+    description="Package completed inspection with compliance issues into an authority-ready, evidence-backed report.",
+)
+def create_consumer_report(
+    inspection_id: str,
+    request: CreateConsumerReportRequest | None = None,
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    report_service: ConsumerReportService = Depends(get_consumer_report_service),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Submit an authority report package for an inspection owned by the caller."""
+    session = store.get_session(inspection_id)
+    _verify_inspection_ownership(session, current_user, inspection_id)
+
+    description = request.consumer_description if request else None
+    preferred_language = request.preferred_language if request else "en"
+
+    # Eligibility validation
+    is_eligible, reason, eligibility = report_service.check_eligibility(session)
+    if not is_eligible or eligibility != ConsumerReportEligibility.ELIGIBLE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": ErrorCode.INVALID_INSPECTION_STATE.value,
+                "message": reason,
+                "details": {
+                    "inspection_id": inspection_id,
+                    "eligibility": eligibility.value,
+                },
+            },
+        )
+
+    report = report_service.create_consumer_report(
+        inspection_id=inspection_id,
+        user=current_user,
+        consumer_description=description,
+        lang=preferred_language,
+    )
+    return report.to_dict(lang=preferred_language)
+

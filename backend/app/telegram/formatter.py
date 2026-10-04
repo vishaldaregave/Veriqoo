@@ -5,6 +5,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from backend.app.localization.service import (
+    SupportedLanguage,
+    get_localization_service,
+)
 from backend.app.services.inspection.models import Inspection, InspectionStatus
 from backend.app.services.inspection_pipeline.models import OverallInspectionStatus
 from backend.app.services.inspection_pipeline.report import InspectionReport
@@ -24,97 +28,125 @@ def sanitize_telegram_text(text: str) -> str:
     return sanitized
 
 
-def format_welcome_message(display_name: str) -> str:
-    """Format /start welcome response."""
-    return (
-        f"👋 Welcome to Veriqoo, {display_name}!\n\n"
-        "Veriqoo is an AI-powered legal-compliance inspection system for packaged commodities.\n\n"
-        "📋 *Commands:*\n"
-        "• /link — Connect your Veriqoo account\n"
-        "• /unlink — Disconnect your account\n"
-        "• /new — Start a new inspection session\n"
-        "• Send Photos — Upload package photographs\n"
-        "• /run — Trigger compliance verification\n"
-        "• /status — Check current inspection status\n"
-        "• /report — View detailed compliance results\n"
-        "• /cancel — Cancel the active session\n"
-        "• /help — Show assistance & command guide"
-    )
+def format_welcome_message(
+    display_name: str,
+    lang: SupportedLanguage | str = SupportedLanguage.EN,
+) -> str:
+    """Format /start welcome response in requested language."""
+    loc = get_localization_service()
+    return loc.get_string("telegram", "welcome", lang=lang, params={"display_name": display_name})
 
 
-def format_help_message() -> str:
-    """Format /help command guide."""
-    return (
-        "📖 *Veriqoo Telegram Inspection Guide*\n\n"
-        "*Step-by-Step Workflow:*\n"
-        "0️⃣ Send /link to connect your Veriqoo user account (one-time setup).\n"
-        "1️⃣ Send /new to begin a fresh package inspection.\n"
-        "2️⃣ Send photos of the package (front, back, sides, declarations).\n"
-        "3️⃣ Send /run to start AI OCR & legal verification.\n"
-        "4️⃣ Check /status or /report to see your compliance findings.\n\n"
-        "*Available Commands:*\n"
-        "• /link — Connect your Veriqoo account\n"
-        "• /unlink — Disconnect your account\n"
-        "• /new — Initialize new session\n"
-        "• /run — Execute verification pipeline\n"
-        "• /status — Check current progress\n"
-        "• /report — Retrieve final report\n"
-        "• /cancel — Reset active session\n"
-        "• /help — Show this help message"
-    )
+def format_help_message(
+    lang: SupportedLanguage | str = SupportedLanguage.EN,
+) -> str:
+    """Format /help command guide in requested language."""
+    loc = get_localization_service()
+    return loc.get_string("telegram", "help", lang=lang)
 
 
-def format_inspection_status(inspection: Inspection) -> str:
-    """Format current inspection container status."""
-    status_emojis = {
-        InspectionStatus.COLLECTING: "📥 Collecting Photos",
-        InspectionStatus.READY: "📦 Ready for Verification",
-        InspectionStatus.RUNNING: "⏳ Analysis in Progress",
-        InspectionStatus.COMPLETED: "✅ Completed",
-        InspectionStatus.FAILED: "❌ Processing Failed",
+def format_lang_changed_message(
+    lang: SupportedLanguage | str,
+) -> str:
+    """Format confirmation message after switching language."""
+    loc = get_localization_service()
+    return loc.get_string("telegram", "lang_changed", lang=lang)
+
+
+def format_lang_invalid_message(
+    invalid_lang: str,
+    lang: SupportedLanguage | str = SupportedLanguage.EN,
+) -> str:
+    """Format error message for unsupported language code."""
+    loc = get_localization_service()
+    return loc.get_string("telegram", "lang_invalid", lang=lang, params={"lang": invalid_lang})
+
+
+def format_inspection_status(
+    inspection: Inspection,
+    lang: SupportedLanguage | str = SupportedLanguage.EN,
+) -> str:
+    """Format current inspection container status in requested language."""
+    loc = get_localization_service()
+    lang_enum = lang if isinstance(lang, SupportedLanguage) else SupportedLanguage.from_str(lang)
+
+    status_keys = {
+        InspectionStatus.COLLECTING: "status_collecting",
+        InspectionStatus.READY: "status_ready",
+        InspectionStatus.RUNNING: "status_running",
+        InspectionStatus.COMPLETED: "status_completed",
+        InspectionStatus.FAILED: "status_failed",
     }
-    status_label = status_emojis.get(inspection.status, inspection.status.value)
+    key = status_keys.get(inspection.status, "status_collecting")
+    status_label = loc.get_string("telegram", key, lang=lang_enum)
     img_count = inspection.image_count
 
     msg = (
-        f"📊 *Inspection Status*\n\n"
+        f"{loc.get_string('telegram', 'status_header', lang=lang_enum)}\n\n"
         f"• *Inspection ID:* `{inspection.inspection_id}`\n"
         f"• *Status:* {status_label}\n"
         f"• *Images Uploaded:* {img_count}\n"
     )
 
     if inspection.status == InspectionStatus.COLLECTING:
-        msg += "\n💡 Send more photos or send /run to begin compliance verification."
+        msg += loc.get_string("telegram", "tip_collecting", lang=lang_enum)
     elif inspection.status == InspectionStatus.RUNNING:
-        msg += "\n💡 Verification is running in the background. Send /status or /report in a few moments."
+        msg += loc.get_string("telegram", "tip_running", lang=lang_enum)
     elif inspection.status == InspectionStatus.COMPLETED:
-        msg += "\n💡 Verification complete! Send /report to view findings."
+        msg += loc.get_string("telegram", "tip_completed", lang=lang_enum)
     elif inspection.status == InspectionStatus.FAILED:
-        msg += "\n💡 Inspection failed. You can send /run to manually retry."
+        msg += loc.get_string("telegram", "tip_failed", lang=lang_enum)
 
     return msg
 
 
-def format_inspection_report(report: InspectionReport) -> str:
-    """Format final InspectionReport into a structured Telegram message."""
-    status_headers = {
-        OverallInspectionStatus.PASS: "✅ *COMPLIANCE STATUS: PASS*",
-        OverallInspectionStatus.FAIL: "❌ *COMPLIANCE STATUS: NON-COMPLIANT (FAIL)*",
-        OverallInspectionStatus.REVIEW_REQUIRED: "⚠️ *COMPLIANCE STATUS: REVIEW REQUIRED*",
-    }
+def format_inspection_report(
+    report: InspectionReport,
+    lang: SupportedLanguage | str = SupportedLanguage.EN,
+) -> str:
+    """Format final InspectionReport into a structured Telegram message in requested language."""
+    loc = get_localization_service()
+    lang_enum = lang if isinstance(lang, SupportedLanguage) else SupportedLanguage.from_str(lang)
 
-    header = status_headers.get(report.overall_status, f"📋 *COMPLIANCE STATUS: {report.overall_status.value}*")
+    header_keys = {
+        OverallInspectionStatus.PASS: "report_header_pass",
+        OverallInspectionStatus.FAIL: "report_header_fail",
+        OverallInspectionStatus.REVIEW_REQUIRED: "report_header_review",
+    }
+    header_key = header_keys.get(report.overall_status, "report_header_review")
+    header = loc.get_string("telegram", header_key, lang=lang_enum)
+
+    failed_ids = [r.requirement_id for r in report.verification_results if r.status == VerificationStatus.FAIL]
+    review_ids = [r.requirement_id for r in report.verification_results if r.status == VerificationStatus.REVIEW_REQUIRED]
+    not_vis_ids = [r.requirement_id for r in report.verification_results if r.status == VerificationStatus.NOT_VISIBLE]
+
+    summary_text = loc.localize_report_summary(
+        overall_status=report.overall_status.value,
+        failed_ids=failed_ids,
+        review_ids=review_ids,
+        not_vis_ids=not_vis_ids,
+        pass_count=report.pass_count,
+        na_count=report.not_applicable_count,
+        lang=lang_enum,
+    ) if lang_enum != SupportedLanguage.EN else report.summary
+
+    counts_title = loc.get_string("telegram", "counts_breakdown", lang=lang_enum)
+    lbl_total = loc.get_string("telegram", "total_evaluated", lang=lang_enum)
+    lbl_passed = loc.get_string("telegram", "passed", lang=lang_enum)
+    lbl_failed = loc.get_string("telegram", "failed", lang=lang_enum)
+    lbl_review = loc.get_string("telegram", "review_required", lang=lang_enum)
+    lbl_notvis = loc.get_string("telegram", "not_visible", lang=lang_enum)
 
     lines = [
         header,
         f"\n• *Inspection ID:* `{report.inspection_id}`",
-        f"• *Summary:* {report.summary}",
-        f"\n📈 *Counts Breakdown:*",
-        f"• Total Requirements Evaluated: {report.applicable_requirement_count}",
-        f"• ✅ Passed: {report.pass_count}",
-        f"• ❌ Failed: {report.fail_count}",
-        f"• ⚠️ Review Required: {report.review_required_count}",
-        f"• 👁️ Not Visible: {report.not_visible_count}",
+        f"• *Summary:* {summary_text}",
+        f"\n{counts_title}",
+        f"• {lbl_total}: {report.applicable_requirement_count}",
+        f"• ✅ {lbl_passed}: {report.pass_count}",
+        f"• ❌ {lbl_failed}: {report.fail_count}",
+        f"• ⚠️ {lbl_review}: {report.review_required_count}",
+        f"• 👁️ {lbl_notvis}: {report.not_visible_count}",
     ]
 
     # Include specific findings for FAIL or REVIEW_REQUIRED results
@@ -124,33 +156,35 @@ def format_inspection_report(report: InspectionReport) -> str:
     ]
 
     if issues:
-        lines.append("\n🔍 *Key Findings & Observations:*")
-        for idx, issue in enumerate(issues[:5], start=1):  # Limit to top 5 findings
+        lines.append(f"\n{loc.get_string('telegram', 'key_findings', lang=lang_enum)}")
+        for idx, issue in enumerate(issues[:5], start=1):
             status_icon = "❌" if issue.status == VerificationStatus.FAIL else "⚠️"
             req_id = issue.requirement_id
             rule_src = (issue.metadata or {}).get("rule_source", "")
             src_text = f" ({rule_src})" if rule_src else ""
-            lines.append(f"{idx}. {status_icon} *{req_id}*{src_text}: {issue.reason}")
+            reason_text = loc.localize_verification_reason(
+                canonical_reason=issue.reason,
+                status=issue.status.value if hasattr(issue.status, "value") else str(issue.status),
+                requirement_id=issue.requirement_id,
+                lang=lang_enum,
+            ) if lang_enum != SupportedLanguage.EN else issue.reason
+            lines.append(f"{idx}. {status_icon} *{req_id}*{src_text}: {reason_text}")
 
     return "\n".join(lines)
 
 
-def format_safe_error(error_code: str, message: str | None = None) -> str:
-    """Map standardized API error codes into user-friendly Telegram error messages."""
-    error_mappings = {
-        "ACCOUNT_UNLINKED": "🔒 Your Telegram account is not linked to a Veriqoo account. Please link your account first using /link.",
-        "INSPECTION_NOT_FOUND": "🔍 Inspection session not found or you are not authorized to access it.",
-        "INVALID_INSPECTION_STATE": "⚠️ Action not permitted in the current inspection state. Send /status to check.",
-        "IMAGE_EMPTY": "❌ The uploaded photograph appears to be empty (0 bytes). Please send a valid photo.",
-        "IMAGE_TOO_LARGE": "❌ The image is too large (max 25 MB / 32 MP). Please send a compressed photo.",
-        "IMAGE_UNSUPPORTED": "❌ Unsupported image format. Please send a standard JPEG, PNG, or WEBP photo.",
-        "INVALID_IMAGE": "❌ The image could not be processed. Please take a clear, well-lit photo of the package.",
-        "REPORT_NOT_AVAILABLE": "⏳ The inspection report is not yet available. Verification is either running or pending.",
-        "PIPELINE_ERROR": "⚠️ Verification processing encountered an issue. Send /run to retry.",
-        "AUTHENTICATION_REQUIRED": "🔒 Authentication error. Please restart the session.",
-        "INTERNAL_ERROR": "⚠️ A server error occurred. Please try again shortly.",
-    }
-    user_msg = error_mappings.get(error_code)
+def format_safe_error(
+    error_code: str,
+    message: str | None = None,
+    lang: SupportedLanguage | str = SupportedLanguage.EN,
+) -> str:
+    """Map standardized API error codes into user-friendly Telegram error messages in requested language."""
+    loc = get_localization_service()
+    code_str = error_code.value if hasattr(error_code, "value") else str(error_code)
+    # Check telegram specific errors section first
+    lang_cat = loc.get_catalog(lang)
+    en_cat = loc.get_catalog("en")
+    user_msg = lang_cat.get("telegram_errors", {}).get(code_str) or en_cat.get("telegram_errors", {}).get(code_str)
     if user_msg:
         return user_msg
     clean_msg = sanitize_telegram_text(message or "An unexpected error occurred.")

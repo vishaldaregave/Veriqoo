@@ -23,6 +23,7 @@ from backend.app.services.inspection_pipeline.models import (
     InspectionPipelineRequest,
     OverallInspectionStatus,
 )
+from backend.app.services.inspection_pipeline.annotations import generate_evidence_annotations
 from backend.app.services.inspection_pipeline.report import (
     InspectionReport,
     compute_overall_status,
@@ -296,6 +297,14 @@ class InspectionPipelineOrchestrator:
         not_applicable_count = sum(1 for r in verification_results if r.status == VerificationStatus.NOT_APPLICABLE)
         review_required_count = sum(1 for r in verification_results if r.status == VerificationStatus.REVIEW_REQUIRED)
 
+        # Generate structured evidence image highlight annotations for non-compliant/review findings
+        evidence_annotations = generate_evidence_annotations(
+            verification_results=verification_results,
+            evidence_candidates=context.evidence_candidates,
+            images=context.images,
+            inspection_id=context.inspection_id,
+        )
+
         # Combine errors from context
         all_errors = list(context.errors) + list(context.ocr_errors)
 
@@ -312,6 +321,7 @@ class InspectionPipelineOrchestrator:
             not_visible_count=not_visible_count,
             not_applicable_count=not_applicable_count,
             review_required_count=review_required_count,
+            evidence_annotations=evidence_annotations,
             errors=all_errors,
             metadata=request.metadata,
         )

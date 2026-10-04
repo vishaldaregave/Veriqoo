@@ -8,6 +8,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 from backend.app.auth.models import AuthenticatedUser
+from backend.app.localization.service import (
+    SupportedLanguage,
+    get_localization_service,
+)
 from backend.app.services.evidence.errors import (
     ImageDecodeError,
     ImageIngestionError,
@@ -26,6 +30,8 @@ from backend.app.telegram.formatter import (
     format_help_message,
     format_inspection_report,
     format_inspection_status,
+    format_lang_changed_message,
+    format_lang_invalid_message,
     format_safe_error,
     format_welcome_message,
     sanitize_telegram_text,
@@ -70,6 +76,11 @@ class TelegramBotAdapter:
             conv.last_interaction = datetime.now(timezone.utc)
             return conv
 
+    def _get_conversation_lang(self, conv: TelegramConversation) -> SupportedLanguage:
+        """Resolve current conversation language preference."""
+        raw_lang = conv.metadata.get("preferred_language") or conv.metadata.get("language")
+        return SupportedLanguage.from_str(raw_lang) if raw_lang else SupportedLanguage.EN
+
     def _verify_ownership(self, inspection: Inspection, user: AuthenticatedUser) -> bool:
         """Verify the authenticated user owns the inspection."""
         if inspection.owner_id and inspection.owner_id != user.user_id:
@@ -78,13 +89,34 @@ class TelegramBotAdapter:
 
     def handle_start(self, identity: TelegramUserIdentity) -> str:
         """Handle /start command."""
-        self._get_conversation(identity)
-        return format_welcome_message(identity.display_name)
+        conv = self._get_conversation(identity)
+        lang = self._get_conversation_lang(conv)
+        return format_welcome_message(identity.display_name, lang=lang)
 
     def handle_help(self, identity: TelegramUserIdentity) -> str:
         """Handle /help command."""
-        self._get_conversation(identity)
-        return format_help_message()
+        conv = self._get_conversation(identity)
+        lang = self._get_conversation_lang(conv)
+        return format_help_message(lang=lang)
+
+    def handle_lang(self, identity: TelegramUserIdentity, lang_code: str | None = None) -> str:
+        """Handle /lang command to view or switch active language preference."""
+        conv = self._get_conversation(identity)
+        current_lang = self._get_conversation_lang(conv)
+
+        if not lang_code or not lang_code.strip():
+            # Show current language
+            return f"🌐 Current language: *{current_lang.display_name}* (`{current_lang.value}`).\n\nTo switch language, send:\n• `/lang en` — English\n• `/lang hi` — हिन्दी\n• `/lang mr` — मराठी"
+
+        clean = lang_code.strip().lower()
+        if clean not in ("en", "hi", "mr"):
+            return format_lang_invalid_message(invalid_lang=clean, lang=current_lang)
+
+        target_lang = SupportedLanguage(clean)
+        with self._lock:
+            conv.metadata["preferred_language"] = target_lang.value
+
+        return format_lang_changed_message(target_lang)
 
     def handle_new(
         self,
@@ -243,6 +275,7 @@ class TelegramBotAdapter:
     def handle_status(self, identity: TelegramUserIdentity) -> str:
         """Handle /status command: query current persistent inspection status."""
         conv = self._get_conversation(identity)
+        lang = self._get_conversation_lang(conv)
         user = self.identity_provider.get_authenticated_user(identity)
 
         if not conv.active_inspection_id:
@@ -254,17 +287,18 @@ class TelegramBotAdapter:
             insp = self.inspection_service.repository.get_inspection(inspection_id)
         except InspectionNotFoundError:
             conv.active_inspection_id = None
-            return format_safe_error("INSPECTION_NOT_FOUND")
+            return format_safe_error("INSPECTION_NOT_FOUND", lang=lang)
 
         if not self._verify_ownership(insp, user):
             conv.active_inspection_id = None
-            return format_safe_error("INSPECTION_NOT_FOUND")
+            return format_safe_error("INSPECTION_NOT_FOUND", lang=lang)
 
-        return format_inspection_status(insp)
+        return format_inspection_status(insp, lang=lang)
 
     def handle_report(self, identity: TelegramUserIdentity) -> str:
         """Handle /report command: retrieve final verification report."""
         conv = self._get_conversation(identity)
+        lang = self._get_conversation_lang(conv)
         user = self.identity_provider.get_authenticated_user(identity)
 
         if not conv.active_inspection_id:
@@ -276,11 +310,11 @@ class TelegramBotAdapter:
             insp = self.inspection_service.repository.get_inspection(inspection_id)
         except InspectionNotFoundError:
             conv.active_inspection_id = None
-            return format_safe_error("INSPECTION_NOT_FOUND")
+            return format_safe_error("INSPECTION_NOT_FOUND", lang=lang)
 
         if not self._verify_ownership(insp, user):
             conv.active_inspection_id = None
-            return format_safe_error("INSPECTION_NOT_FOUND")
+            return format_safe_error("INSPECTION_NOT_FOUND", lang=lang)
 
         if insp.status == InspectionStatus.COLLECTING:
             return (
@@ -302,10 +336,10 @@ class TelegramBotAdapter:
         # COMPLETED: Fetch report
         report = self.inspection_service.repository.get_report(inspection_id)
         if not report:
-            return format_safe_error("REPORT_NOT_AVAILABLE")
+            return format_safe_error("REPORT_NOT_AVAILABLE", lang=lang)
 
         conv.state = TelegramWorkflowState.COMPLETED
-        return format_inspection_report(report)
+        return format_inspection_report(report, lang=lang)
 
     def handle_cancel(self, identity: TelegramUserIdentity) -> str:
         """Handle /cancel command: clear Telegram conversation state."""

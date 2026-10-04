@@ -19,10 +19,16 @@ from backend.app.api.errors import (
     unsupported_image_handler,
     validation_exception_handler,
 )
+from backend.app.api.v1.endpoints.authority import router as authority_router
+from backend.app.api.v1.endpoints.consumer_reports import router as consumer_reports_router
 from backend.app.api.v1.endpoints.health import router as health_router
+from backend.app.api.v1.endpoints.heatmap import router as heatmap_router
 from backend.app.api.v1.endpoints.inspections import router as inspections_router
+from backend.app.api.v1.endpoints.public_reports import router as public_reports_router
 from backend.app.api.v1.endpoints.telegram_link import router as telegram_link_router
+from backend.app.api.v1.endpoints.voice import router as voice_router
 from backend.app.config import get_settings
+
 from backend.app.services.evidence.errors import (
     ImageDecodeError,
     ImageIngestionError,
@@ -90,14 +96,22 @@ def create_app() -> FastAPI:
     app.add_exception_handler(Exception, generic_exception_handler)
 
     # Register Routers
-    # Root health endpoint
+    # Root health endpoint and public report shares
     app.include_router(health_router)
-    # v1 health and inspections endpoints
+    app.include_router(public_reports_router)
+    # v1 health, inspections, public reports, heatmap, voice, authority, consumer reports, and telegram endpoints
     app.include_router(health_router, prefix="/api/v1")
     app.include_router(inspections_router, prefix="/api/v1")
+    app.include_router(consumer_reports_router, prefix="/api/v1")
+    app.include_router(public_reports_router, prefix="/api/v1")
+    app.include_router(heatmap_router, prefix="/api/v1")
+    app.include_router(voice_router, prefix="/api/v1")
+    app.include_router(authority_router, prefix="/api/v1")
     app.include_router(telegram_link_router, prefix="/api/v1")
 
     return app
+
+
 
 
 app = create_app()

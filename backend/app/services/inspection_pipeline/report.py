@@ -62,6 +62,7 @@ class InspectionReport:
     not_visible_count: int
     not_applicable_count: int
     review_required_count: int
+    evidence_annotations: list[Any] = dataclasses.field(default_factory=list)
     created_at: datetime = dataclasses.field(default_factory=lambda: datetime.now(timezone.utc))
     errors: list[dict[str, Any]] = dataclasses.field(default_factory=list)
     metadata: dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -70,12 +71,59 @@ class InspectionReport:
         if self.created_at.tzinfo is None:
             self.created_at = self.created_at.replace(tzinfo=timezone.utc)
 
-    def to_dict(self) -> dict[str, Any]:
-        """Convert report to clean serializable dictionary representation."""
+    def to_dict(self, lang: str | None = None) -> dict[str, Any]:
+        """Convert report to clean serializable dictionary representation with optional presentation localization."""
+        from backend.app.localization.service import SupportedLanguage, get_localization_service
+        loc = get_localization_service()
+        lang_enum = SupportedLanguage.from_str(lang) if lang else SupportedLanguage.EN
+
+        failed_ids = [r.requirement_id for r in self.verification_results if r.status == VerificationStatus.FAIL]
+        review_ids = [r.requirement_id for r in self.verification_results if r.status == VerificationStatus.REVIEW_REQUIRED]
+        not_vis_ids = [r.requirement_id for r in self.verification_results if r.status == VerificationStatus.NOT_VISIBLE]
+
+        # Localized summary statement
+        localized_summary = loc.localize_report_summary(
+            overall_status=self.overall_status.value,
+            failed_ids=failed_ids,
+            review_ids=review_ids,
+            not_vis_ids=not_vis_ids,
+            pass_count=self.pass_count,
+            na_count=self.not_applicable_count,
+            lang=lang_enum,
+        ) if lang_enum != SupportedLanguage.EN else self.summary
+
+        # Localize annotations presentation fields
+        localized_annotations = []
+        for a in self.evidence_annotations:
+            ann_dict = a.to_dict() if hasattr(a, "to_dict") else dict(a)
+            if lang_enum != SupportedLanguage.EN:
+                ann_dict["label"] = loc.get_statutory_label(ann_dict.get("requirement_id", ""), lang=lang_enum)
+                ann_dict["reason"] = loc.localize_verification_reason(
+                    canonical_reason=ann_dict.get("reason", ""),
+                    status=ann_dict.get("status", ""),
+                    requirement_id=ann_dict.get("requirement_id", ""),
+                    lang=lang_enum,
+                )
+            localized_annotations.append(ann_dict)
+
+        # Localize verification results presentation fields
+        localized_v_results = []
+        for r in self.verification_results:
+            r_dict = r.to_dict()
+            if lang_enum != SupportedLanguage.EN:
+                r_dict["reason"] = loc.localize_verification_reason(
+                    canonical_reason=r.reason,
+                    status=r.status.value if hasattr(r.status, "value") else str(r.status),
+                    requirement_id=r.requirement_id,
+                    lang=lang_enum,
+                )
+            localized_v_results.append(r_dict)
+
         return {
             "inspection_id": self.inspection_id,
             "overall_status": self.overall_status.value,
-            "summary": self.summary,
+            "language": lang_enum.value,
+            "summary": localized_summary,
             "counts": {
                 "image_count": self.image_count,
                 "evidence_count": self.evidence_count,
@@ -86,7 +134,8 @@ class InspectionReport:
                 "not_applicable_count": self.not_applicable_count,
                 "review_required_count": self.review_required_count,
             },
-            "verification_results": [r.to_dict() for r in self.verification_results],
+            "evidence_annotations": localized_annotations,
+            "verification_results": localized_v_results,
             "errors": self.errors,
             "created_at": self.created_at.isoformat(),
             "metadata": self.metadata,
