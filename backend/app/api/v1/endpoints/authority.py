@@ -1,912 +1,267 @@
-"""Authority Case Management REST Endpoints (T3-4 Phase 4)."""
+"""FastAPI router for Phase U9 — Authority Intelligence & Risk Prioritization."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-import logging
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from backend.app.api.dependencies import (
-    get_authority_case_service,
-    get_establishment_service,
+from backend.app.api.dependencies import get_authority_service
+from backend.app.api.schemas import (
+    AuthorityLocationResponse,
+    AuthorityOverviewResponse,
+    AuthorityPriorityItemResponse,
+    AuthorityPriorityQueueResponse,
+    AuthorityRiskSignalResponse,
+    ManufacturerIntelligenceListResponse,
+    ManufacturerIntelligenceResponse,
+    ProductIntelligenceListResponse,
+    ProductIntelligenceResponse,
+    TopViolatedRequirementResponse,
+    TopViolationCategoryResponse,
 )
-from backend.app.api.errors import ErrorCode
-from backend.app.services.authority.case_service import AuthorityCaseService
-from backend.app.services.authority.dependencies import require_authority_user
-from backend.app.services.authority.errors import (
-    AuthorityInactiveError,
-    AuthorityJurisdictionDeniedError,
-    CaseNotFoundError,
-    InvalidAssignmentError,
-    InvalidCaseNoteError,
-    InvalidJurisdictionScopeError,
-    InvalidStatusTransitionError,
-)
-from backend.app.services.authority.models import AuthorityPrincipal
-from backend.app.services.consumer_issues.models import ConsumerIssue
-from backend.app.services.authority.schemas import (
-    AuditEventResponse,
-    CaseAssignRequest,
-    CaseAssignResponse,
-    CaseAuditTimelineResponse,
-    CaseDetailResponse,
-    CaseListResponse,
-    CaseNoteResponse,
-    CaseNotesListResponse,
-    CaseStatusTransitionRequest,
-    CaseStatusTransitionResponse,
-    CaseSummaryResponse,
-    CreateCaseNoteRequest,
-    VerifyCaseJurisdictionRequest,
-    VerifyCaseJurisdictionResponse,
-)
-from backend.app.services.establishment.errors import (
-    DuplicateEstablishmentError,
-    EstablishmentConcurrencyError,
-    EstablishmentInactiveError,
-    EstablishmentNotFoundError,
-    EstablishmentUnverifiedError,
-    InvalidEstablishmentDataError,
-)
-from backend.app.services.establishment.models import RetailEstablishment
-from backend.app.services.establishment.schemas import (
-    CreateEstablishmentRequest,
-    EstablishmentAuditEventResponse,
-    EstablishmentAuditTimelineResponse,
-    EstablishmentResponse,
-    PaginatedEstablishmentsResponse,
-    ReviewEstablishmentRequest,
-)
-from backend.app.services.establishment.service import EstablishmentService
+from backend.app.auth import AuthenticatedUser, get_current_user
+from backend.app.services.authority.intelligence import AuthorityIntelligenceService
+from backend.app.services.authority.models import AuthorityPriorityItem
+from backend.app.services.inspection.errors import InspectionNotFoundError
 
-logger = logging.getLogger(__name__)
-
-router = APIRouter(prefix="/authority", tags=["Authority Workflow"])
+router = APIRouter(prefix="/authority/intelligence", tags=["Authority Intelligence"])
 
 
-@router.get("/cases", response_model=CaseListResponse)
-def list_authority_cases(
-    status_filter: str | None = Query(None, alias="status", description="Filter by complaint status"),
-    issue_type_filter: str | None = Query(None, alias="issue_type", description="Filter by complaint category"),
-    assigned: bool | None = Query(None, description="Filter by assignment status (true=assigned, false=unassigned)"),
-    my_cases: bool = Query(False, description="Filter strictly to cases assigned to the current officer"),
-    limit: int = Query(20, ge=1, le=100, description="Page size"),
-    offset: int = Query(0, ge=0, description="Pagination offset"),
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    case_service: AuthorityCaseService = Depends(get_authority_case_service),
-) -> CaseListResponse:
-    """List complaints within the authenticated officer's authorized department and jurisdiction."""
-    try:
-        cases, total = case_service.list_cases(
-            authority=principal,
-            status=status_filter,
-            issue_type=issue_type_filter,
-            assigned=assigned,
-            my_cases=my_cases,
-            limit=limit,
-            offset=offset,
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError, InvalidJurisdictionScopeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to list authority cases: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while querying authority case queue.",
-                "details": {},
-            },
+def _map_priority_item(item: AuthorityPriorityItem) -> AuthorityPriorityItemResponse:
+    """Helper to convert domain AuthorityPriorityItem to Pydantic schema."""
+    loc_resp = None
+    if item.location:
+        loc_resp = AuthorityLocationResponse(
+            state_code=item.location.get("state_code"),
+            district_code=item.location.get("district_code"),
+            state_name=item.location.get("state_name"),
+            district_name=item.location.get("district_name"),
         )
 
-    items = [
-        CaseSummaryResponse(
-            id=c.id,
-            user_id=c.user_id,
-            inspection_id=c.inspection_id,
-            saved_product_id=c.saved_product_id,
-            issue_type=c.issue_type,
-            title=c.title,
-            status=c.status,
-            department=c.department,
-            state_code=c.state_code,
-            district_code=c.district_code,
-            jurisdiction_verified=c.jurisdiction_verified,
-            establishment_id=c.establishment_id,
-            jurisdiction_provenance=c.jurisdiction_provenance or "UNVERIFIED",
-            jurisdiction_verified_at=c.jurisdiction_verified_at,
-            jurisdiction_verified_by=c.jurisdiction_verified_by,
-            assigned_officer_id=c.assigned_officer_id,
-            assigned_at=c.assigned_at,
-            assigned_by=c.assigned_by,
-            created_at=c.created_at,
-            updated_at=c.updated_at,
+    signals_resp = [
+        AuthorityRiskSignalResponse(
+            code=s.code,
+            severity=s.severity,
+            explanation=s.explanation,
+            source=s.source,
+            evidence_ids=s.evidence_ids,
+            requirement_ids=s.requirement_ids,
         )
-        for c in cases
+        for s in item.risk_signals
     ]
-    return CaseListResponse(items=items, total=total, limit=limit, offset=offset)
 
-def _map_case_detail_response(c: ConsumerIssue) -> CaseDetailResponse:
-    """Helper to map ConsumerIssue domain model to CaseDetailResponse schema."""
-    return CaseDetailResponse(
-        id=c.id,
-        user_id=c.user_id,
-        inspection_id=c.inspection_id,
-        saved_product_id=c.saved_product_id,
-        issue_type=c.issue_type,
-        title=c.title,
-        description=c.description,
-        status=c.status,
-        resolution_notes=c.resolution_notes,
-        evidence_images=c.evidence_images,
-        department=c.department,
-        state_code=c.state_code,
-        district_code=c.district_code,
-        jurisdiction_verified=c.jurisdiction_verified,
-        establishment_id=c.establishment_id,
-        jurisdiction_provenance=c.jurisdiction_provenance or "UNVERIFIED",
-        jurisdiction_verified_at=c.jurisdiction_verified_at,
-        jurisdiction_verified_by=c.jurisdiction_verified_by,
-        assigned_officer_id=c.assigned_officer_id,
-        assigned_at=c.assigned_at,
-        assigned_by=c.assigned_by,
-        created_at=c.created_at,
-        updated_at=c.updated_at,
+    return AuthorityPriorityItemResponse(
+        inspection_id=item.inspection_id,
+        priority=item.priority.value if hasattr(item.priority, "value") else str(item.priority),
+        priority_score=item.priority_score,
+        reasons=item.reasons,
+        canonical_status=item.canonical_status,
+        risk_signal=item.risk_signal,
+        compliance_score=item.compliance_score,
+        rating=item.rating,
+        failed_requirement_count=item.failed_requirement_count,
+        review_required_count=item.review_required_count,
+        not_visible_count=item.not_visible_count,
+        risk_signals=signals_resp,
+        product_summary=item.product_summary,
+        identity_confidence=item.identity_confidence,
+        location=loc_resp,
+        created_at=item.created_at,
     )
 
 
-@router.get("/cases/{case_id}", response_model=CaseDetailResponse)
-def get_case_details(
-    case_id: str,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    case_service: AuthorityCaseService = Depends(get_authority_case_service),
-) -> CaseDetailResponse:
-    """Retrieve full details of an investigation case, verifying authority jurisdiction access."""
-    try:
-        c = case_service.get_case_details(authority=principal, case_id=case_id)
-    except CaseNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": ErrorCode.CONSUMER_ISSUE_NOT_FOUND.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError, InvalidJurisdictionScopeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to get case details for '%s': %s", case_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while retrieving case details.",
-                "details": {},
-            },
-        )
+@router.get("/priorities", response_model=AuthorityPriorityQueueResponse)
+def get_priorities_queue(
+    min_priority: str | None = Query(
+        default=None,
+        description="Filter by minimum priority level: CRITICAL, HIGH, MEDIUM, LOW, INFORMATIONAL",
+    ),
+    status: str | None = Query(
+        default=None,
+        description="Filter by canonical inspection status: PASS, FAIL, REVIEW_REQUIRED",
+    ),
+    state_code: str | None = Query(
+        default=None,
+        description="Filter by 2-letter state code (e.g. MH, DL)",
+    ),
+    district_code: str | None = Query(
+        default=None,
+        description="Filter by district code (e.g. PUN)",
+    ),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    authority_service: AuthorityIntelligenceService = Depends(get_authority_service),
+) -> AuthorityPriorityQueueResponse:
+    """Retrieve prioritized inspection enforcement queue for authority review.
 
-    return _map_case_detail_response(c)
-
-
-@router.post("/cases/{case_id}/assign", response_model=CaseAssignResponse)
-def assign_case_officer(
-    case_id: str,
-    payload: CaseAssignRequest,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    case_service: AuthorityCaseService = Depends(get_authority_case_service),
-) -> CaseAssignResponse:
-    """Assign or reassign the primary investigating officer to a complaint."""
-    try:
-        saved_case, audit_event = case_service.assign_officer(
-            authority=principal,
-            case_id=case_id,
-            target_officer_id=payload.officer_user_id,
-            expected_assigned_officer_id=payload.expected_assigned_officer_id,
-            expect_unassigned=payload.expect_unassigned,
-        )
-    except CaseNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": ErrorCode.CONSUMER_ISSUE_NOT_FOUND.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError, InvalidJurisdictionScopeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except InvalidAssignmentError as exc:
-        status_code = (
-            status.HTTP_409_CONFLICT
-            if "conflict" in exc.message.lower() or "concurrent" in exc.message.lower()
-            else status.HTTP_422_UNPROCESSABLE_ENTITY
-        )
-        raise HTTPException(
-            status_code=status_code,
-            detail={
-                "code": ErrorCode.INVALID_INSPECTION_STATE.value if status_code == 409 else ErrorCode.INVALID_REQUEST.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to assign officer to case '%s': %s", case_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while assigning case officer.",
-                "details": {},
-            },
-        )
-
-    return CaseAssignResponse(
-        case_id=saved_case.id,
-        assigned_officer_id=saved_case.assigned_officer_id or "",
-        assigned_by=saved_case.assigned_by or principal.user_id,
-        assigned_at=saved_case.assigned_at or audit_event.created_at,
-        event_id=audit_event.id,
-    )
-
-
-@router.get("/cases/{case_id}/notes", response_model=CaseNotesListResponse)
-def list_case_notes(
-    case_id: str,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    case_service: AuthorityCaseService = Depends(get_authority_case_service),
-) -> CaseNotesListResponse:
-    """List confidential investigation notes for an authorized complaint."""
-    try:
-        notes = case_service.list_investigation_notes(authority=principal, case_id=case_id)
-    except CaseNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": ErrorCode.CONSUMER_ISSUE_NOT_FOUND.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError, InvalidJurisdictionScopeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to list notes for case '%s': %s", case_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while fetching case notes.",
-                "details": {},
-            },
-        )
-
-    items = [
-        CaseNoteResponse(
-            id=n.id,
-            issue_id=n.issue_id,
-            author_id=n.author_id,
-            note_text=n.note_text,
-            is_internal=n.is_internal,
-            created_at=n.created_at,
-            updated_at=n.updated_at,
-        )
-        for n in notes
-    ]
-    return CaseNotesListResponse(items=items, total=len(items))
-
-
-@router.post("/cases/{case_id}/notes", response_model=CaseNoteResponse, status_code=status.HTTP_201_CREATED)
-def add_case_note(
-    case_id: str,
-    payload: CreateCaseNoteRequest,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    case_service: AuthorityCaseService = Depends(get_authority_case_service),
-) -> CaseNoteResponse:
-    """Record a confidential internal investigation note on a case."""
-    try:
-        note, _ = case_service.add_investigation_note(
-            authority=principal,
-            case_id=case_id,
-            note_text=payload.note_text,
-        )
-    except CaseNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": ErrorCode.CONSUMER_ISSUE_NOT_FOUND.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError, InvalidJurisdictionScopeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except InvalidCaseNoteError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": ErrorCode.INVALID_REQUEST.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to add note to case '%s': %s", case_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while recording investigation note.",
-                "details": {},
-            },
-        )
-
-    return CaseNoteResponse(
-        id=note.id,
-        issue_id=note.issue_id,
-        author_id=note.author_id,
-        note_text=note.note_text,
-        is_internal=note.is_internal,
-        created_at=note.created_at,
-        updated_at=note.updated_at,
-    )
-
-
-@router.patch("/cases/{case_id}/status", response_model=CaseStatusTransitionResponse)
-def transition_case_status(
-    case_id: str,
-    payload: CaseStatusTransitionRequest,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    case_service: AuthorityCaseService = Depends(get_authority_case_service),
-) -> CaseStatusTransitionResponse:
-    """Perform a validated lifecycle status transition on an investigation case."""
-    try:
-        saved_case, audit_event = case_service.transition_status(
-            authority=principal,
-            case_id=case_id,
-            new_status=payload.new_status,
-            resolution_notes=payload.resolution_notes,
-            expected_status=payload.expected_status,
-        )
-    except CaseNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": ErrorCode.CONSUMER_ISSUE_NOT_FOUND.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError, InvalidJurisdictionScopeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except InvalidStatusTransitionError as exc:
-        status_code = (
-            status.HTTP_409_CONFLICT
-            if "conflict" in exc.message.lower() or "concurrent" in exc.message.lower()
-            else status.HTTP_422_UNPROCESSABLE_ENTITY
-        )
-        raise HTTPException(
-            status_code=status_code,
-            detail={
-                "code": ErrorCode.INVALID_INSPECTION_STATE.value if status_code == 409 else ErrorCode.INVALID_REQUEST.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to transition status on case '%s': %s", case_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while updating case status.",
-                "details": {},
-            },
-        )
-
-    return CaseStatusTransitionResponse(
-        case_id=saved_case.id,
-        previous_status=audit_event.previous_state or "",
-        new_status=saved_case.status,
-        resolution_notes=saved_case.resolution_notes,
-        updated_at=saved_case.updated_at,
-        event_id=audit_event.id,
-    )
-
-
-@router.get("/cases/{case_id}/audit-timeline", response_model=CaseAuditTimelineResponse)
-def get_case_audit_timeline(
-    case_id: str,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    case_service: AuthorityCaseService = Depends(get_authority_case_service),
-) -> CaseAuditTimelineResponse:
-    """Retrieve audit timeline for an authorized case."""
-    try:
-        events = case_service.list_audit_events(authority=principal, case_id=case_id)
-    except CaseNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": ErrorCode.CONSUMER_ISSUE_NOT_FOUND.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError, InvalidJurisdictionScopeError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to get audit timeline for case '%s': %s", case_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while retrieving case audit timeline.",
-                "details": {},
-            },
-        )
-
-    items = [
-        AuditEventResponse(
-            id=e.id,
-            issue_id=e.issue_id,
-            actor_id=e.actor_id,
-            actor_role=e.actor_role,
-            event_type=e.event_type,
-            previous_state=e.previous_state,
-            new_state=e.new_state,
-            metadata=e.metadata,
-            created_at=e.created_at,
-        )
-        for e in events
-    ]
-    return CaseAuditTimelineResponse(items=items, total=len(items))
-
-
-@router.post("/cases/{case_id}/verify-jurisdiction", response_model=VerifyCaseJurisdictionResponse)
-def verify_case_jurisdiction(
-    case_id: str,
-    payload: VerifyCaseJurisdictionRequest,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    case_service: AuthorityCaseService = Depends(get_authority_case_service),
-) -> VerifyCaseJurisdictionResponse:
-    """Verify complaint jurisdiction against an active, verified commercial establishment."""
-    try:
-        saved_case, audit_event = case_service.verify_case_jurisdiction(
-            authority=principal,
-            case_id=case_id,
-            establishment_id=payload.establishment_id,
-            provenance=payload.provenance,
-            verification_notes=payload.verification_notes,
-        )
-    except CaseNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": ErrorCode.CONSUMER_ISSUE_NOT_FOUND.value,
-                "message": exc.message,
-                "details": exc.details,
-            },
-        )
-    except EstablishmentNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "ESTABLISHMENT_NOT_FOUND",
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except (EstablishmentInactiveError, EstablishmentUnverifiedError, InvalidJurisdictionScopeError, InvalidStatusTransitionError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": ErrorCode.INVALID_REQUEST.value,
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to verify jurisdiction for case '%s': %s", case_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while verifying case jurisdiction.",
-                "details": {},
-            },
-        )
-
-    verified_time = saved_case.jurisdiction_verified_at or audit_event.created_at
-    verifier_id = saved_case.jurisdiction_verified_by or principal.user_id
-
-    return VerifyCaseJurisdictionResponse(
-        case_id=saved_case.id,
-        establishment_id=saved_case.establishment_id or payload.establishment_id,
-        state_code=saved_case.state_code or "",
-        district_code=saved_case.district_code or "",
-        jurisdiction_verified=saved_case.jurisdiction_verified,
-        jurisdiction_provenance=saved_case.jurisdiction_provenance or payload.provenance,
-        verified_at=verified_time,
-        verified_by=verifier_id,
-        audit_event_id=audit_event.id,
-        jurisdiction_verified_at=verified_time,
-        jurisdiction_verified_by=verifier_id,
-        event_id=audit_event.id,
-    )
-
-
-def _map_establishment_response(est: RetailEstablishment) -> EstablishmentResponse:
-    return EstablishmentResponse(
-        id=est.id,
-        trade_name=est.trade_name,
-        legal_name=est.legal_name,
-        gstin=est.gstin,
-        lm_license_number=est.lm_license_number,
-        shop_establishment_number=est.shop_establishment_number,
-        state_code=est.state_code,
-        district_code=est.district_code,
-        pincode=est.pincode,
-        physical_address=est.physical_address,
-        verification_status=est.verification_status,
-        verification_provenance=est.verification_provenance,
-        verification_authority_id=est.verification_authority_id,
-        verification_date=est.verification_date,
-        verification_notes=est.verification_notes,
-        is_active=est.is_active,
-        created_at=est.created_at,
-        updated_at=est.updated_at,
-        created_by=est.created_by,
-        updated_by=est.updated_by,
-    )
-
-
-@router.post("/establishments", response_model=EstablishmentResponse, status_code=status.HTTP_201_CREATED)
-def create_establishment(
-    payload: CreateEstablishmentRequest,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    establishment_service: EstablishmentService = Depends(get_establishment_service),
-) -> EstablishmentResponse:
-    """Onboard a new commercial premises in PENDING status."""
-    try:
-        est = establishment_service.create_establishment(authority=principal, data=payload)
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except DuplicateEstablishmentError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "code": "DUPLICATE_ESTABLISHMENT",
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except InvalidEstablishmentDataError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": ErrorCode.INVALID_REQUEST.value,
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to onboard establishment: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while creating establishment.",
-                "details": {},
-            },
-        )
-
-    return _map_establishment_response(est)
-
-
-@router.post("/establishments/{establishment_id}/review", response_model=EstablishmentResponse)
-def review_establishment(
-    establishment_id: str,
-    payload: ReviewEstablishmentRequest,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    establishment_service: EstablishmentService = Depends(get_establishment_service),
-) -> EstablishmentResponse:
-    """Administrative review to VERIFY, SUSPEND, or REVOKE an establishment with concurrency token protection."""
-    try:
-        est, _ = establishment_service.review_establishment(
-            authority=principal,
-            establishment_id=establishment_id,
-            action=payload.action,
-            expected_status=payload.expected_status,
-            notes=payload.get_notes(),
-            provenance=payload.provenance,
-        )
-    except EstablishmentNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "ESTABLISHMENT_NOT_FOUND",
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except EstablishmentConcurrencyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "code": "CONCURRENT_UPDATE_CONFLICT",
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except DuplicateEstablishmentError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "code": "DUPLICATE_ESTABLISHMENT",
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except InvalidEstablishmentDataError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": ErrorCode.INVALID_REQUEST.value,
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to review establishment '%s': %s", establishment_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while reviewing establishment.",
-                "details": {},
-            },
-        )
-
-    return _map_establishment_response(est)
-
-
-@router.get("/establishments/{establishment_id}/audit-timeline", response_model=EstablishmentAuditTimelineResponse)
-def get_establishment_audit_timeline(
-    establishment_id: str,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    establishment_service: EstablishmentService = Depends(get_establishment_service),
-) -> EstablishmentAuditTimelineResponse:
-    """Retrieve chronological audit timeline for an establishment bounded by authority jurisdiction."""
-    try:
-        est = establishment_service.get_establishment(principal, establishment_id)
-        if principal.jurisdiction.state_code != est.state_code or est.district_code not in principal.jurisdiction.authorized_district_codes:
-            raise AuthorityJurisdictionDeniedError(
-                f"Officer is not authorized to view audit events for establishment in {est.state_code}/{est.district_code}.",
-                details={"establishment_id": establishment_id},
-            )
-        raw_events = establishment_service.repo.get_audit_events(establishment_id)
-    except EstablishmentNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "ESTABLISHMENT_NOT_FOUND",
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to fetch audit timeline for establishment '%s': %s", establishment_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while retrieving audit timeline.",
-                "details": {},
-            },
-        )
-
-    items = []
-    for e in raw_events:
-        ts = e.get("created_at")
-        if isinstance(ts, str):
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-        elif isinstance(ts, datetime):
-            dt = ts
-        else:
-            dt = datetime.now(timezone.utc)
-        items.append(
-            EstablishmentAuditEventResponse(
-                id=str(e["id"]),
-                establishment_id=str(e["establishment_id"]),
-                actor_id=str(e["actor_id"]),
-                actor_role=e.get("actor_role", "authority"),
-                action=e["action"],
-                event_type=e.get("event_type", f"ESTABLISHMENT_{e['action']}"),
-                previous_status=e["previous_status"],
-                new_status=e["new_status"],
-                previous_is_active=bool(e["previous_is_active"]),
-                new_is_active=bool(e["new_is_active"]),
-                notes=e.get("notes"),
-                provenance=e.get("provenance", "MANUAL"),
-                metadata=e.get("metadata", {}),
-                created_at=dt,
-            )
-        )
-    return EstablishmentAuditTimelineResponse(
-        establishment_id=establishment_id,
-        items=items,
-        total=len(items),
-    )
-
-
-@router.get("/establishments/{establishment_id}", response_model=EstablishmentResponse)
-def get_establishment(
-    establishment_id: str,
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    establishment_service: EstablishmentService = Depends(get_establishment_service),
-) -> EstablishmentResponse:
-    """Retrieve establishment details bounded by authority jurisdiction."""
-    try:
-        est = establishment_service.get_establishment(authority=principal, establishment_id=establishment_id)
-    except EstablishmentNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "code": "ESTABLISHMENT_NOT_FOUND",
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to retrieve establishment '%s': %s", establishment_id, exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while retrieving establishment.",
-                "details": {},
-            },
-        )
-
-    return _map_establishment_response(est)
-
-
-@router.get("/establishments", response_model=PaginatedEstablishmentsResponse)
-def list_establishments(
-    district_code: str | None = Query(None, description="Optional district filter"),
-    verification_status: str | None = Query(None, description="Optional verification status filter"),
-    is_active: bool | None = Query(None, description="Optional active status filter"),
-    limit: int = Query(50, ge=1, le=100, description="Page limit"),
-    offset: int = Query(0, ge=0, description="Page offset"),
-    principal: AuthorityPrincipal = Depends(require_authority_user),
-    establishment_service: EstablishmentService = Depends(get_establishment_service),
-) -> PaginatedEstablishmentsResponse:
-    """List establishments within the officer's jurisdiction."""
-    try:
-        items, total = establishment_service.list_establishments(
-            authority=principal,
-            district_code=district_code,
-            verification_status=verification_status,
-            is_active=is_active,
-            limit=limit,
-            offset=offset,
-        )
-    except (AuthorityInactiveError, AuthorityJurisdictionDeniedError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "code": ErrorCode.FORBIDDEN.value,
-                "message": exc.message,
-                "details": getattr(exc, "details", {}),
-            },
-        )
-    except Exception as exc:
-        logger.error("Failed to list establishments: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "message": "Internal error occurred while listing establishments.",
-                "details": {},
-            },
-        )
-
-    return PaginatedEstablishmentsResponse(
-        items=[_map_establishment_response(i) for i in items],
-        total=total,
+    Guarantees:
+    - Protected: Requires authenticated user identity.
+    - Deterministic ranking: Ranked by priority score (0-100) and recency.
+    - Explainable: Includes structured reasons and risk signals for each ranking.
+    - Privacy: No private consumer credentials, tokens, or raw OCR exposed.
+    """
+    items, total = authority_service.get_priority_queue(
+        min_priority=min_priority,
+        status_filter=status,
+        state_filter=state_code,
+        district_filter=district_code,
         limit=limit,
         offset=offset,
     )
 
+    return AuthorityPriorityQueueResponse(
+        total_count=total,
+        items=[_map_priority_item(item) for item in items],
+    )
+
+
+@router.get("/inspections/{inspection_id}", response_model=AuthorityPriorityItemResponse)
+def get_inspection_detail_intelligence(
+    inspection_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    authority_service: AuthorityIntelligenceService = Depends(get_authority_service),
+) -> AuthorityPriorityItemResponse:
+    """Retrieve typed intelligence and priority ranking for a single inspection."""
+    try:
+        item = authority_service.get_inspection_detail_intelligence(inspection_id=inspection_id)
+        return _map_priority_item(item)
+    except InspectionNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "INSPECTION_NOT_FOUND",
+                "message": str(e),
+                "details": {"inspection_id": inspection_id},
+            },
+        )
+
+
+@router.get("/manufacturers", response_model=ManufacturerIntelligenceListResponse)
+def get_manufacturer_intelligence(
+    min_inspections: int = Query(default=1, ge=1),
+    search: str | None = Query(default=None, description="Search manufacturer by name substring"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    authority_service: AuthorityIntelligenceService = Depends(get_authority_service),
+) -> ManufacturerIntelligenceListResponse:
+    """Retrieve aggregated compliance profiles across manufacturers with verified identity.
+
+    Guarantees:
+    - Only includes inspections with HIGH or MEDIUM product identity confidence.
+    - Uses neutral regulatory language (never labels entities illegal/fraudulent).
+    - Includes legal and sample disclaimers.
+    """
+    summaries, total = authority_service.get_manufacturer_summaries(
+        min_inspections=min_inspections,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+
+    items = [
+        ManufacturerIntelligenceResponse(
+            manufacturer_name=s.manufacturer_name,
+            inspection_count=s.inspection_count,
+            pass_count=s.pass_count,
+            fail_count=s.fail_count,
+            review_count=s.review_count,
+            observed_issue_rate=s.observed_issue_rate,
+            repeat_issue_count=s.repeat_issue_count,
+            top_violation_categories=[
+                TopViolationCategoryResponse(
+                    category=c["category"],
+                    failure_count=c["failure_count"],
+                )
+                for c in s.top_violation_categories
+            ],
+            identity_confidence=s.identity_confidence,
+            trend=s.trend.value if hasattr(s.trend, "value") else str(s.trend),
+            last_inspected_at=s.last_inspected_at,
+            disclaimer=s.disclaimer,
+        )
+        for s in summaries
+    ]
+
+    return ManufacturerIntelligenceListResponse(
+        total_count=total,
+        items=items,
+    )
+
+
+@router.get("/products", response_model=ProductIntelligenceListResponse)
+def get_product_intelligence(
+    commodity: str | None = Query(default=None, description="Filter by legal metrology commodity"),
+    brand: str | None = Query(default=None, description="Filter by brand name"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    authority_service: AuthorityIntelligenceService = Depends(get_authority_service),
+) -> ProductIntelligenceListResponse:
+    """Retrieve aggregated compliance profiles across products and commodities."""
+    summaries, total = authority_service.get_product_summaries(
+        commodity_filter=commodity,
+        brand_filter=brand,
+        limit=limit,
+        offset=offset,
+    )
+
+    items = [
+        ProductIntelligenceResponse(
+            product_key=p.product_key,
+            brand=p.brand,
+            generic_name=p.generic_name,
+            commodity=p.commodity,
+            barcode=p.barcode,
+            inspection_count=p.inspection_count,
+            pass_count=p.pass_count,
+            fail_count=p.fail_count,
+            review_count=p.review_count,
+            observed_issue_rate=p.observed_issue_rate,
+            top_violation_categories=[
+                TopViolationCategoryResponse(
+                    category=c["category"],
+                    failure_count=c["failure_count"],
+                )
+                for c in p.top_violation_categories
+            ],
+            identity_confidence=p.identity_confidence,
+            trend=p.trend.value if hasattr(p.trend, "value") else str(p.trend),
+            last_inspected_at=p.last_inspected_at,
+        )
+        for p in summaries
+    ]
+
+    return ProductIntelligenceListResponse(
+        total_count=total,
+        items=items,
+    )
+
+
+@router.get("/overview", response_model=AuthorityOverviewResponse)
+def get_authority_overview(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+    authority_service: AuthorityIntelligenceService = Depends(get_authority_service),
+) -> AuthorityOverviewResponse:
+    """Retrieve high-level overview metrics for authority decision support dashboard."""
+    metrics = authority_service.get_overview_metrics()
+
+    return AuthorityOverviewResponse(
+        total_completed_inspections=metrics.total_completed_inspections,
+        critical_priority_count=metrics.critical_priority_count,
+        high_priority_count=metrics.high_priority_count,
+        medium_priority_count=metrics.medium_priority_count,
+        low_priority_count=metrics.low_priority_count,
+        overall_observed_issue_rate=metrics.overall_observed_issue_rate,
+        active_manufacturers_tracked=metrics.active_manufacturers_tracked,
+        top_violated_requirements=[
+            TopViolatedRequirementResponse(
+                requirement=r["requirement"],
+                failure_count=r["failure_count"],
+            )
+            for r in metrics.top_violated_requirements
+        ],
+        generated_at=metrics.generated_at,
+    )

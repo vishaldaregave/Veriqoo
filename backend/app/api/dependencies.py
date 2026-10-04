@@ -6,6 +6,8 @@ from functools import lru_cache
 from typing import Generator
 from fastapi import Depends
 
+from fastapi import Depends
+
 from backend.app.api.session_store import InMemoryInspectionStore
 from backend.app.auth import AuthenticatedUser, get_current_user
 from backend.app.config import Settings, get_settings
@@ -113,214 +115,270 @@ def get_account_linking_service():
     return AccountLinkingService(repository=repo)
 
 
-_GLOBAL_USER_PROFILE_REPO: Any = None
-
-
-def get_user_profile_repository():
-    """Provide UserProfileRepository backend (Supabase or In-Memory)."""
-    global _GLOBAL_USER_PROFILE_REPO
-    from backend.app.services.user_profile.repository import (
-        InMemoryUserProfileRepository,
-        SupabaseUserProfileRepository,
-    )
-
-    if _GLOBAL_USER_PROFILE_REPO is None:
-        settings = get_settings()
-        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
-            _GLOBAL_USER_PROFILE_REPO = SupabaseUserProfileRepository(settings=settings)
-        else:
-            _GLOBAL_USER_PROFILE_REPO = InMemoryUserProfileRepository()
-    return _GLOBAL_USER_PROFILE_REPO
-
-
-def get_user_profile_service(
-    repository: Any = Depends(get_user_profile_repository),
+def get_report_sharing_service(
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    settings: Settings = Depends(get_app_settings),
 ):
-    """Provide UserProfileService coordinator."""
-    from backend.app.services.user_profile.service import UserProfileService
+    """Provide ReportSharingService coordinator for Phase U4."""
+    from backend.app.services.report_sharing.service import ReportSharingService
 
-    return UserProfileService(repository=repository)
-
-
-_GLOBAL_SAVED_PRODUCT_REPO: Any = None
+    return ReportSharingService(store=store, settings=settings)
 
 
-def get_saved_product_repository():
-    """Provide SavedProductRepository backend (Supabase or In-Memory)."""
-    global _GLOBAL_SAVED_PRODUCT_REPO
-    from backend.app.services.saved_products.repository import (
-        InMemorySavedProductRepository,
-        SupabaseSavedProductRepository,
-    )
-
-    if _GLOBAL_SAVED_PRODUCT_REPO is None:
-        settings = get_settings()
-        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
-            _GLOBAL_SAVED_PRODUCT_REPO = SupabaseSavedProductRepository(settings=settings)
-        else:
-            _GLOBAL_SAVED_PRODUCT_REPO = InMemorySavedProductRepository()
-    return _GLOBAL_SAVED_PRODUCT_REPO
-
-
-def get_saved_product_service(
-    repository: Any = Depends(get_saved_product_repository),
-    session_store: Any = Depends(get_session_store),
+def get_consumer_intelligence_service(
+    store: InMemoryInspectionStore = Depends(get_session_store),
 ):
-    """Provide SavedProductService coordinator."""
-    from backend.app.services.saved_products.service import SavedProductService
+    """Provide ConsumerIntelligenceService coordinator for Phase U5."""
+    from backend.app.localization.service import get_localization_service
+    from backend.app.services.consumer_intelligence.service import ConsumerIntelligenceService
 
-    return SavedProductService(repository=repository, session_store=session_store)
-
-
-_GLOBAL_CONSUMER_ISSUE_REPO: Any = None
-
-
-def get_consumer_issue_repository():
-    """Provide ConsumerIssueRepository backend (Supabase or In-Memory)."""
-    global _GLOBAL_CONSUMER_ISSUE_REPO
-    from backend.app.services.consumer_issues.repository import (
-        InMemoryConsumerIssueRepository,
-        SupabaseConsumerIssueRepository,
-    )
-
-    if _GLOBAL_CONSUMER_ISSUE_REPO is None:
-        settings = get_settings()
-        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
-            _GLOBAL_CONSUMER_ISSUE_REPO = SupabaseConsumerIssueRepository(settings=settings)
-        else:
-            _GLOBAL_CONSUMER_ISSUE_REPO = InMemoryConsumerIssueRepository()
-    return _GLOBAL_CONSUMER_ISSUE_REPO
+    loc = get_localization_service()
+    return ConsumerIntelligenceService(store=store, localization=loc)
 
 
-_GLOBAL_LOCATION_REGISTRY: Any = None
-
-
-def get_verified_location_registry():
-    """Provide authoritative ServerVerifiedLocationRegistry."""
-    global _GLOBAL_LOCATION_REGISTRY
-    from backend.app.services.consumer_issues.jurisdiction import ServerVerifiedLocationRegistry
-
-    if _GLOBAL_LOCATION_REGISTRY is None:
-        _GLOBAL_LOCATION_REGISTRY = ServerVerifiedLocationRegistry()
-    return _GLOBAL_LOCATION_REGISTRY
-
-
-def get_trusted_jurisdiction_resolver(
-    registry: Any = Depends(get_verified_location_registry),
+def get_consumer_result_service(
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    intelligence_service: Any = Depends(get_consumer_intelligence_service),
 ):
-    """Provide DefaultTrustedJurisdictionResolver coordinator."""
-    from backend.app.services.consumer_issues.jurisdiction import DefaultTrustedJurisdictionResolver
+    """Provide ConsumerResultService coordinator for Phase U6."""
+    from backend.app.localization.service import get_localization_service
+    from backend.app.services.consumer_result.service import ConsumerResultService
 
-    return DefaultTrustedJurisdictionResolver(registry=registry)
+    loc = get_localization_service()
+    return ConsumerResultService(
+        session_store=store,
+        localization_service=loc,
+        intelligence_service=intelligence_service,
+    )
 
 
-def get_consumer_issue_service(
-    repository: Any = Depends(get_consumer_issue_repository),
-    session_store: Any = Depends(get_session_store),
-    saved_product_repository: Any = Depends(get_saved_product_repository),
-    jurisdiction_resolver: Any = Depends(get_trusted_jurisdiction_resolver),
+def get_heatmap_service(
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    intelligence_service: Any = Depends(get_consumer_intelligence_service),
 ):
-    """Provide ConsumerIssueService coordinator."""
-    from backend.app.services.consumer_issues.service import ConsumerIssueService
+    """Provide HeatmapService coordinator for Phase U7."""
+    from backend.app.localization.service import get_localization_service
+    from backend.app.services.heatmap.service import HeatmapService
 
-    return ConsumerIssueService(
-        repository=repository,
-        session_store=session_store,
-        saved_product_repository=saved_product_repository,
-        jurisdiction_resolver=jurisdiction_resolver,
+    loc = get_localization_service()
+    return HeatmapService(
+        store=store,
+        localization=loc,
+        intelligence_service=intelligence_service,
     )
 
 
-_GLOBAL_AUTHORITY_REPO: Any = None
+def get_voice_service(
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    intelligence_service: Any = Depends(get_consumer_intelligence_service),
+    consumer_result_service: Any = Depends(get_consumer_result_service),
+    settings: Settings = Depends(get_app_settings),
+):
+    """Provide VoiceAssistantService coordinator for Phase U8."""
+    from backend.app.localization.service import get_localization_service
+    from backend.app.services.voice.context import VoiceContextResolver
+    from backend.app.services.voice.providers.reasoning import (
+        FakeVoiceReasoningProvider,
+        GeminiVoiceReasoningProvider,
+    )
+    from backend.app.services.voice.providers.stt import (
+        DeepgramSpeechToTextProvider,
+        FakeSpeechToTextProvider,
+    )
+    from backend.app.services.voice.providers.tts import (
+        CartesiaTextToSpeechProvider,
+        FakeTextToSpeechProvider,
+    )
+    from backend.app.services.voice.service import VoiceAssistantService
 
+    loc = get_localization_service()
 
-def get_authority_repository():
-    """Provide AuthorityRepository backend (Supabase or In-Memory)."""
-    global _GLOBAL_AUTHORITY_REPO
-    from backend.app.services.authority.repository import (
-        InMemoryAuthorityRepository,
-        SupabaseAuthorityRepository,
+    # Configure STT provider
+    if settings.deepgram_api_key:
+        stt_provider = DeepgramSpeechToTextProvider(
+            api_key=settings.deepgram_api_key,
+            model=settings.deepgram_model,
+        )
+    else:
+        stt_provider = FakeSpeechToTextProvider()
+
+    # Configure TTS provider
+    if settings.cartesia_api_key:
+        tts_provider = CartesiaTextToSpeechProvider(
+            api_key=settings.cartesia_api_key,
+            model_id=settings.cartesia_model_id,
+            default_voice_id=settings.cartesia_voice_id or None,
+        )
+    else:
+        tts_provider = FakeTextToSpeechProvider()
+
+    # Configure Voice Reasoning provider
+    if settings.gemini_api_key:
+        reasoning_provider = GeminiVoiceReasoningProvider(
+            api_key=settings.gemini_api_key,
+        )
+    else:
+        reasoning_provider = FakeVoiceReasoningProvider()
+
+    context_resolver = VoiceContextResolver(
+        session_store=store,
+        localization=loc,
+        consumer_result_service=consumer_result_service,
+        consumer_intelligence_service=intelligence_service,
     )
 
-    if _GLOBAL_AUTHORITY_REPO is None:
-        settings = get_settings()
-        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
-            _GLOBAL_AUTHORITY_REPO = SupabaseAuthorityRepository(settings=settings)
-        else:
-            _GLOBAL_AUTHORITY_REPO = InMemoryAuthorityRepository()
-    return _GLOBAL_AUTHORITY_REPO
+    return VoiceAssistantService(
+        stt_provider=stt_provider,
+        tts_provider=tts_provider,
+        reasoning_provider=reasoning_provider,
+        context_resolver=context_resolver,
+        localization=loc,
+    )
 
 
 def get_authority_service(
-    repository: Any = Depends(get_authority_repository),
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    intelligence_service: Any = Depends(get_consumer_intelligence_service),
+    consumer_result_service: Any = Depends(get_consumer_result_service),
+    heatmap_service: Any = Depends(get_heatmap_service),
 ):
-    """Provide AuthorityService coordinator."""
-    from backend.app.services.authority.service import AuthorityService
+    """Provide AuthorityIntelligenceService coordinator for Phase U9."""
+    from backend.app.localization.service import get_localization_service
+    from backend.app.services.authority.intelligence import AuthorityIntelligenceService
 
-    return AuthorityService(repository=repository)
-
-
-_GLOBAL_AUTHORITY_CASE_REPO: Any = None
-
-
-def get_authority_case_repository():
-    """Provide AuthorityCaseRepository backend (Supabase or In-Memory)."""
-    global _GLOBAL_AUTHORITY_CASE_REPO
-    from backend.app.services.authority.case_repository import (
-        InMemoryAuthorityCaseRepository,
-        SupabaseAuthorityCaseRepository,
+    loc = get_localization_service()
+    return AuthorityIntelligenceService(
+        store=store,
+        localization=loc,
+        consumer_intel_service=intelligence_service,
+        consumer_result_service=consumer_result_service,
+        heatmap_service=heatmap_service,
     )
 
-    if _GLOBAL_AUTHORITY_CASE_REPO is None:
-        settings = get_settings()
-        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
-            _GLOBAL_AUTHORITY_CASE_REPO = SupabaseAuthorityCaseRepository(settings=settings)
-        else:
-            _GLOBAL_AUTHORITY_CASE_REPO = InMemoryAuthorityCaseRepository()
-    return _GLOBAL_AUTHORITY_CASE_REPO
+
+_GLOBAL_INSPECTION_REPO: Any = None
 
 
-_GLOBAL_ESTABLISHMENT_REPO: Any = None
-
-
-def get_establishment_repository():
-    """Provide EstablishmentRepository backend (Supabase or In-Memory)."""
-    global _GLOBAL_ESTABLISHMENT_REPO
-    from backend.app.services.establishment.repository import (
-        InMemoryEstablishmentRepository,
-        SupabaseEstablishmentRepository,
+def get_inspection_repository():
+    """Provide InspectionRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_INSPECTION_REPO
+    from backend.app.services.inspection.repository import (
+        InMemoryInspectionRepository,
+        SupabaseInspectionRepository,
     )
 
-    if _GLOBAL_ESTABLISHMENT_REPO is None:
+    if _GLOBAL_INSPECTION_REPO is None:
         settings = get_settings()
         if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
-            _GLOBAL_ESTABLISHMENT_REPO = SupabaseEstablishmentRepository(settings=settings)
+            _GLOBAL_INSPECTION_REPO = SupabaseInspectionRepository(
+                supabase_url=settings.supabase_url,
+                supabase_key=getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key,
+            )
         else:
-            _GLOBAL_ESTABLISHMENT_REPO = InMemoryEstablishmentRepository()
-    return _GLOBAL_ESTABLISHMENT_REPO
+            _GLOBAL_INSPECTION_REPO = InMemoryInspectionRepository()
+    return _GLOBAL_INSPECTION_REPO
 
 
-def get_establishment_service(
-    repository: Any = Depends(get_establishment_repository),
+def get_consumer_report_service(
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    intelligence_service: Any = Depends(get_consumer_intelligence_service),
+    consumer_result_service: Any = Depends(get_consumer_result_service),
+    repository: Any = Depends(get_inspection_repository),
 ):
-    """Provide EstablishmentService coordinator."""
-    from backend.app.services.establishment.service import EstablishmentService
+    """Provide ConsumerReportService coordinator for Phase U10."""
+    from backend.app.localization.service import get_localization_service
+    from backend.app.services.consumer_report.service import ConsumerReportService
 
-    return EstablishmentService(repository=repository)
+    loc = get_localization_service()
+    return ConsumerReportService(
+        store=store,
+        repository=repository,
+        localization=loc,
+        consumer_intel_service=intelligence_service,
+        consumer_result_service=consumer_result_service,
+    )
 
 
-def get_authority_case_service(
-    case_repository: Any = Depends(get_authority_case_repository),
-    authority_repository: Any = Depends(get_authority_repository),
-    establishment_repository: Any = Depends(get_establishment_repository),
+_GLOBAL_SYNC_OPERATION_REPO: Any = None
+
+
+def get_sync_operation_repository():
+    """Provide SyncOperationRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_SYNC_OPERATION_REPO
+    from backend.app.services.offline_sync.repository import (
+        InMemorySyncOperationRepository,
+        SupabaseSyncOperationRepository,
+    )
+
+    if _GLOBAL_SYNC_OPERATION_REPO is None:
+        settings = get_settings()
+        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
+            _GLOBAL_SYNC_OPERATION_REPO = SupabaseSyncOperationRepository(settings=settings)
+        else:
+            _GLOBAL_SYNC_OPERATION_REPO = InMemorySyncOperationRepository()
+    return _GLOBAL_SYNC_OPERATION_REPO
+
+
+def get_sync_ingestion_service(
+    sync_repo: Any = Depends(get_sync_operation_repository),
+    inspection_repo: Any = Depends(get_inspection_repository),
+    settings: Settings = Depends(get_app_settings),
 ):
-    """Provide AuthorityCaseService coordinator."""
-    from backend.app.services.authority.case_service import AuthorityCaseService
+    """Provide SyncIngestionService coordinator for Phase U24."""
+    from backend.app.services.offline_sync.ingestion import SyncIngestionService
 
-    return AuthorityCaseService(
-        case_repository=case_repository,
-        authority_repository=authority_repository,
-        establishment_repository=establishment_repository,
+    return SyncIngestionService(
+        sync_repository=sync_repo,
+        inspection_repository=inspection_repo,
+        server_version=settings.app_version,
+    )
+
+
+def get_server_revalidation_service(
+    sync_repo: Any = Depends(get_sync_operation_repository),
+    inspection_repo: Any = Depends(get_inspection_repository),
+    store: InMemoryInspectionStore = Depends(get_session_store),
+):
+    """Provide ServerRevalidationService coordinator for Phase U24-F/G."""
+    from backend.app.services.offline_sync.revalidation import ServerRevalidationService
+
+    return ServerRevalidationService(
+        sync_repository=sync_repo,
+        inspection_repository=inspection_repo,
+        session_store=store,
+    )
+
+
+_GLOBAL_EVIDENCE_CHAIN_REPO: Any = None
+
+
+def get_evidence_chain_repository():
+    """Provide EvidenceChainRepository backend (Supabase or In-Memory)."""
+    global _GLOBAL_EVIDENCE_CHAIN_REPO
+    from backend.app.services.evidence_chain.repository import (
+        InMemoryEvidenceChainRepository,
+        SupabaseEvidenceChainRepository,
+    )
+
+    if _GLOBAL_EVIDENCE_CHAIN_REPO is None:
+        settings = get_settings()
+        if settings.supabase_url and (getattr(settings, "supabase_service_role_key", None) or settings.supabase_anon_key):
+            _GLOBAL_EVIDENCE_CHAIN_REPO = SupabaseEvidenceChainRepository(settings=settings)
+        else:
+            _GLOBAL_EVIDENCE_CHAIN_REPO = InMemoryEvidenceChainRepository()
+    return _GLOBAL_EVIDENCE_CHAIN_REPO
+
+
+def get_evidence_chain_service(
+    evidence_repo: Any = Depends(get_evidence_chain_repository),
+    storage: Any = Depends(get_image_storage),
+):
+    """Provide EvidenceChainService coordinator for Phase U25."""
+    from backend.app.services.evidence_chain.service import EvidenceChainService
+
+    return EvidenceChainService(
+        repository=evidence_repo,
+        storage=storage,
     )
 
 

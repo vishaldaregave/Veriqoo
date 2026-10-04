@@ -1,43 +1,27 @@
-"""Authority Dashboard & Access Control Module (T3-4 Phase 2)."""
+"""Phase U9 — Authority Intelligence & Risk Prioritization Package."""
 
-from backend.app.services.authority.errors import (
-    AuthorityAccessDeniedError,
-    AuthorityError,
-    AuthorityInactiveError,
-    AuthorityJurisdictionDeniedError,
-    AuthorityNotProvisionedError,
-    InvalidJurisdictionScopeError,
-)
 from backend.app.services.authority.models import (
-    AuthorityPrincipal,
-    AuthorityProfile,
-    CaseJurisdiction,
-    DepartmentCode,
-    JurisdictionLevel,
-    JurisdictionScope,
+    AuthorityOverviewMetrics,
+    AuthorityPriority,
+    AuthorityPriorityItem,
+    AuthorityRiskSignal,
+    ManufacturerIntelligenceSummary,
+    ProductIntelligenceSummary,
+    RiskSignalCode,
+    TrendDirection,
 )
-from backend.app.services.authority.policy import AuthorityAccessPolicy
-from backend.app.services.authority.repository import (
-    AuthorityRepository,
-    InMemoryAuthorityRepository,
-)
-from backend.app.services.authority.service import AuthorityService
+from backend.app.services.authority.prioritizer import InspectionPrioritizer
+from backend.app.services.authority.intelligence import AuthorityIntelligenceService
 
 __all__ = [
-    "AuthorityAccessDeniedError",
-    "AuthorityError",
-    "AuthorityInactiveError",
-    "AuthorityJurisdictionDeniedError",
-    "AuthorityNotProvisionedError",
-    "InvalidJurisdictionScopeError",
-    "AuthorityPrincipal",
-    "AuthorityProfile",
-    "CaseJurisdiction",
-    "DepartmentCode",
-    "JurisdictionLevel",
-    "JurisdictionScope",
-    "AuthorityAccessPolicy",
-    "AuthorityRepository",
-    "InMemoryAuthorityRepository",
-    "AuthorityService",
+    "AuthorityOverviewMetrics",
+    "AuthorityPriority",
+    "AuthorityPriorityItem",
+    "AuthorityRiskSignal",
+    "ManufacturerIntelligenceSummary",
+    "ProductIntelligenceSummary",
+    "RiskSignalCode",
+    "TrendDirection",
+    "InspectionPrioritizer",
+    "AuthorityIntelligenceService",
 ]

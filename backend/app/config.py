@@ -37,8 +37,19 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_bot_enabled: bool = False
 
+    # Public report URL configuration for QR codes and report sharing
+    public_report_base_url: str = "http://localhost:8000/r"
+
+    # Voice AI (Deepgram STT & Cartesia TTS)
+    deepgram_api_key: str = ""
+    deepgram_model: str = "nova-3"
+    cartesia_api_key: str = ""
+    cartesia_model_id: str = "sonic-multilingual"
+    cartesia_voice_id: str = ""
+
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
+
         env_file_encoding="utf-8",
         extra="ignore",
     )

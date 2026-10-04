@@ -1,0 +1,83 @@
+"""Phase U8 — Voice AI Module."""
+
+from backend.app.services.voice.context import VoiceContextResolver
+from backend.app.services.voice.errors import (
+    VoiceAudioTooLargeError,
+    VoiceAudioValidationError,
+    VoiceContextNotFoundError,
+    VoiceError,
+    VoiceInvalidLanguageError,
+    VoiceProviderError,
+    VoiceProviderNotConfiguredError,
+    VoiceProviderTimeoutError,
+    VoiceReasoningError,
+    VoiceSessionNotFoundError,
+    VoiceTranscriptionError,
+    VoiceTTSError,
+    VoiceUnsupportedAudioError,
+)
+from backend.app.services.voice.intent import VoiceIntentClassifier
+from backend.app.services.voice.models import (
+    STTResult,
+    TTSResult,
+    VoiceIntent,
+    VoiceReasoningContext,
+    VoiceReasoningResult,
+    VoiceResponse,
+    VoiceSession,
+    VoiceSessionStatus,
+)
+from backend.app.services.voice.providers import (
+    CartesiaTextToSpeechProvider,
+    DeepgramSpeechToTextProvider,
+    FakeSpeechToTextProvider,
+    FakeTextToSpeechProvider,
+    FakeVoiceReasoningProvider,
+    GeminiVoiceReasoningProvider,
+    SpeechToTextProvider,
+    TextToSpeechProvider,
+    VoiceReasoningProvider,
+)
+from backend.app.services.voice.service import (
+    MAX_AUDIO_PAYLOAD_BYTES,
+    MAX_TRANSCRIPT_CHARS,
+    SUPPORTED_AUDIO_CONTENT_TYPES,
+    VoiceAssistantService,
+)
+
+__all__ = [
+    "CartesiaTextToSpeechProvider",
+    "DeepgramSpeechToTextProvider",
+    "FakeSpeechToTextProvider",
+    "FakeTextToSpeechProvider",
+    "FakeVoiceReasoningProvider",
+    "GeminiVoiceReasoningProvider",
+    "MAX_AUDIO_PAYLOAD_BYTES",
+    "MAX_TRANSCRIPT_CHARS",
+    "SUPPORTED_AUDIO_CONTENT_TYPES",
+    "SpeechToTextProvider",
+    "TextToSpeechProvider",
+    "VoiceAssistantService",
+    "VoiceAudioTooLargeError",
+    "VoiceAudioValidationError",
+    "VoiceContextNotFoundError",
+    "VoiceContextResolver",
+    "VoiceError",
+    "VoiceIntent",
+    "VoiceIntentClassifier",
+    "VoiceInvalidLanguageError",
+    "VoiceProviderError",
+    "VoiceProviderNotConfiguredError",
+    "VoiceProviderTimeoutError",
+    "VoiceReasoningContext",
+    "VoiceReasoningError",
+    "VoiceReasoningProvider",
+    "VoiceReasoningResult",
+    "VoiceResponse",
+    "VoiceSession",
+    "VoiceSessionNotFoundError",
+    "VoiceSessionStatus",
+    "VoiceTTSError",
+    "VoiceTranscriptionError",
+    "VoiceUnsupportedAudioError",
+]

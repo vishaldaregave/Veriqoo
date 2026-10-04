@@ -1,4 +1,4 @@
-"""Domain models and value objects for Authority Dashboard & Access Control (T3-4 Phase 2)."""
+"""Domain models and data contracts for Phase U9 — Authority Intelligence & Risk Prioritization."""
 
 from __future__ import annotations
 
@@ -6,154 +6,196 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
-import uuid
 
 
-class JurisdictionLevel(str, Enum):
-    """Hierarchical level of authority jurisdiction."""
-    DISTRICT = "DISTRICT"
-    STATE = "STATE"
+class AuthorityPriority(str, Enum):
+    """Deterministic priority classification for inspection queue ranking."""
+    CRITICAL = "CRITICAL"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+    INFORMATIONAL = "INFORMATIONAL"
 
 
-class DepartmentCode(str, Enum):
-    """Standardized departmental identifiers."""
-    LEGAL_METROLOGY = "LEGAL_METROLOGY"
-    FOOD_SAFETY = "FOOD_SAFETY"
-    CONSUMER_AFFAIRS = "CONSUMER_AFFAIRS"
-    WEIGHTS_AND_MEASURES = "WEIGHTS_AND_MEASURES"
+class TrendDirection(str, Enum):
+    """Observed historical frequency trend."""
+    INCREASING = "INCREASING"
+    DECREASING = "DECREASING"
+    STABLE = "STABLE"
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
 
 
-@dataclass(frozen=True)
-class JurisdictionScope:
-    """Geographic and departmental scope assigned to an authority principal.
+class RiskSignalCode(str, Enum):
+    """Categorical risk signals for authority decision support."""
+    REPEATED_FAILURES = "REPEATED_FAILURES"
+    HIGH_FAILURE_BURDEN = "HIGH_FAILURE_BURDEN"
+    LOW_COMPLIANCE_SCORE = "LOW_COMPLIANCE_SCORE"
+    HIGH_RISK_NON_COMPLIANCE = "HIGH_RISK_NON_COMPLIANCE"
+    POTENTIAL_COMPLIANCE_ISSUE = "POTENTIAL_COMPLIANCE_ISSUE"
+    PRODUCT_IDENTITY_CONFIRMED = "PRODUCT_IDENTITY_CONFIRMED"
+    PRODUCT_IDENTITY_UNCERTAIN = "PRODUCT_IDENTITY_UNCERTAIN"
+    GEOGRAPHIC_ISSUE_ELEVATED = "GEOGRAPHIC_ISSUE_ELEVATED"
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
+    NO_MAJOR_ISSUES_DETECTED = "NO_MAJOR_ISSUES_DETECTED"
 
-    Represents explicit state and district boundaries.
-    Wildcards and global access are strictly prohibited.
-    """
-    state_code: str
-    level: JurisdictionLevel
-    authorized_district_codes: frozenset[str]
 
-    def __init__(
-        self,
-        state_code: str,
-        level: JurisdictionLevel | str,
-        authorized_district_codes: set[str] | list[str] | frozenset[str],
-    ) -> None:
-        clean_state = state_code.strip().upper() if state_code else ""
-        if not clean_state:
-            raise ValueError("JurisdictionScope requires a non-empty state_code.")
+@dataclass
+class AuthorityRiskSignal:
+    """Structured, explainable risk indicator derived from canonical inspection facts."""
+    code: str
+    severity: str  # CRITICAL, HIGH, MEDIUM, LOW, INFO
+    explanation: str
+    source: str  # U1, U5, U6, U7, REPEAT_ANALYSIS
+    evidence_ids: list[str] = field(default_factory=list)
+    requirement_ids: list[str] = field(default_factory=list)
 
-        resolved_level = JurisdictionLevel(level) if isinstance(level, str) else level
-
-        clean_districts = {
-            d.strip().upper()
-            for d in authorized_district_codes
-            if isinstance(d, str) and d.strip()
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "severity": self.severity,
+            "explanation": self.explanation,
+            "source": self.source,
+            "evidence_ids": list(self.evidence_ids),
+            "requirement_ids": list(self.requirement_ids),
         }
-        if not clean_districts:
-            raise ValueError("JurisdictionScope requires at least one authorized district code.")
-
-        object.__setattr__(self, "state_code", clean_state)
-        object.__setattr__(self, "level", resolved_level)
-        object.__setattr__(self, "authorized_district_codes", frozenset(clean_districts))
-
-
-@dataclass(frozen=True)
-class CaseJurisdiction:
-    """Territorial and departmental location tags associated with an inspection or complaint."""
-    department: str
-    state_code: str
-    district_code: str
-
-    def __init__(self, department: str, state_code: str, district_code: str) -> None:
-        clean_dept = department.strip().upper() if department else ""
-        clean_state = state_code.strip().upper() if state_code else ""
-        clean_dist = district_code.strip().upper() if district_code else ""
-
-        object.__setattr__(self, "department", clean_dept)
-        object.__setattr__(self, "state_code", clean_state)
-        object.__setattr__(self, "district_code", clean_dist)
-
-    def is_valid(self) -> bool:
-        """Verify that case jurisdiction contains non-empty identifiers for all dimensions."""
-        return bool(self.department and self.state_code and self.district_code)
 
 
 @dataclass
-class AuthorityProfile:
-    """Authority officer profile entity representing administrative credentials and jurisdiction."""
-    user_id: str
-    department: str
-    designation: str
-    jurisdiction: JurisdictionScope
-    is_active: bool = True
-    badge_number: str | None = None
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+class AuthorityPriorityItem:
+    """Prioritized inspection item for authority enforcement decision support."""
+    inspection_id: str
+    priority: AuthorityPriority
+    priority_score: int  # 0 to 100 bounded deterministic integer
+    reasons: list[str]
+    canonical_status: str  # PASS, FAIL, REVIEW_REQUIRED
+    risk_signal: str  # U5 risk signal
+    compliance_score: float | None
+    rating: str | None
+    failed_requirement_count: int
+    review_required_count: int
+    not_visible_count: int
+    risk_signals: list[AuthorityRiskSignal] = field(default_factory=list)
+    product_summary: dict[str, Any] = field(default_factory=dict)
+    identity_confidence: str = "UNKNOWN"
+    location: dict[str, Any] | None = None
+    created_at: str = ""
 
-    def __post_init__(self) -> None:
-        self.department = self.department.strip().upper()
-        self.designation = self.designation.strip()
-
-
-@dataclass(frozen=True)
-class AuthorityPrincipal:
-    """Authenticated and authorized authority context injected into API endpoints.
-
-    Contains verified identity, role, department, and jurisdiction scope.
-    """
-    user_id: str
-    email: str | None
-    app_role: str
-    department: str
-    designation: str
-    jurisdiction: JurisdictionScope
-    is_active: bool = True
-    badge_number: str | None = None
-
-
-@dataclass
-class InvestigationNote:
-    """Confidential internal investigation note for an authority case."""
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    issue_id: str = ""
-    author_id: str = ""
-    note_text: str = ""
-    is_internal: bool = True
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-
-    def __post_init__(self) -> None:
-        if self.created_at and self.created_at.tzinfo is None:
-            self.created_at = self.created_at.replace(tzinfo=timezone.utc)
-        if self.updated_at and self.updated_at.tzinfo is None:
-            self.updated_at = self.updated_at.replace(tzinfo=timezone.utc)
-
-
-class AuditEventType(str, Enum):
-    """Event types recorded in case audit history."""
-    CASE_ASSIGNED = "CASE_ASSIGNED"
-    CASE_REASSIGNED = "CASE_REASSIGNED"
-    NOTE_ADDED = "NOTE_ADDED"
-    STATUS_CHANGED = "STATUS_CHANGED"
-    JURISDICTION_VERIFIED = "JURISDICTION_VERIFIED"
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "inspection_id": self.inspection_id,
+            "priority": self.priority.value,
+            "priority_score": self.priority_score,
+            "reasons": list(self.reasons),
+            "canonical_status": self.canonical_status,
+            "risk_signal": self.risk_signal,
+            "compliance_score": self.compliance_score,
+            "rating": self.rating,
+            "failed_requirement_count": self.failed_requirement_count,
+            "review_required_count": self.review_required_count,
+            "not_visible_count": self.not_visible_count,
+            "risk_signals": [s.to_dict() for s in self.risk_signals],
+            "product_summary": dict(self.product_summary),
+            "identity_confidence": self.identity_confidence,
+            "location": dict(self.location) if self.location else None,
+            "created_at": self.created_at,
+        }
 
 
 @dataclass
-class AuditEvent:
-    """Case audit log entry for statutory and administrative traceability."""
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    issue_id: str | None = None
-    actor_id: str = ""
-    actor_role: str = ""
-    event_type: str = AuditEventType.STATUS_CHANGED.value
-    previous_state: str | None = None
-    new_state: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+class ManufacturerIntelligenceSummary:
+    """Aggregated compliance profile for an identified manufacturer."""
+    manufacturer_name: str
+    inspection_count: int
+    pass_count: int
+    fail_count: int
+    review_count: int
+    observed_issue_rate: float
+    repeat_issue_count: int
+    top_violation_categories: list[dict[str, Any]] = field(default_factory=list)
+    identity_confidence: str = "HIGH"
+    trend: TrendDirection = TrendDirection.INSUFFICIENT_DATA
+    last_inspected_at: str | None = None
+    disclaimer: str = (
+        "Based strictly on Veriqoo observed inspection sample records. "
+        "Does not constitute an official legal determination or regulatory penalty."
+    )
 
-    def __post_init__(self) -> None:
-        if self.created_at and self.created_at.tzinfo is None:
-            self.created_at = self.created_at.replace(tzinfo=timezone.utc)
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "manufacturer_name": self.manufacturer_name,
+            "inspection_count": self.inspection_count,
+            "pass_count": self.pass_count,
+            "fail_count": self.fail_count,
+            "review_count": self.review_count,
+            "observed_issue_rate": self.observed_issue_rate,
+            "repeat_issue_count": self.repeat_issue_count,
+            "top_violation_categories": list(self.top_violation_categories),
+            "identity_confidence": self.identity_confidence,
+            "trend": self.trend.value,
+            "last_inspected_at": self.last_inspected_at,
+            "disclaimer": self.disclaimer,
+        }
+
+
+@dataclass
+class ProductIntelligenceSummary:
+    """Aggregated compliance profile for an identified commodity or product."""
+    product_key: str
+    brand: str | None = None
+    generic_name: str | None = None
+    commodity: str | None = None
+    barcode: str | None = None
+    inspection_count: int = 0
+    pass_count: int = 0
+    fail_count: int = 0
+    review_count: int = 0
+    observed_issue_rate: float = 0.0
+    top_violation_categories: list[dict[str, Any]] = field(default_factory=list)
+    identity_confidence: str = "HIGH"
+    trend: TrendDirection = TrendDirection.INSUFFICIENT_DATA
+    last_inspected_at: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "product_key": self.product_key,
+            "brand": self.brand,
+            "generic_name": self.generic_name,
+            "commodity": self.commodity,
+            "barcode": self.barcode,
+            "inspection_count": self.inspection_count,
+            "pass_count": self.pass_count,
+            "fail_count": self.fail_count,
+            "review_count": self.review_count,
+            "observed_issue_rate": self.observed_issue_rate,
+            "top_violation_categories": list(self.top_violation_categories),
+            "identity_confidence": self.identity_confidence,
+            "trend": self.trend.value,
+            "last_inspected_at": self.last_inspected_at,
+        }
+
+
+@dataclass
+class AuthorityOverviewMetrics:
+    """High-level summary metrics for authority intelligence overview dashboard."""
+    total_completed_inspections: int
+    critical_priority_count: int
+    high_priority_count: int
+    medium_priority_count: int
+    low_priority_count: int
+    overall_observed_issue_rate: float
+    active_manufacturers_tracked: int
+    top_violated_requirements: list[dict[str, Any]] = field(default_factory=list)
+    generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_completed_inspections": self.total_completed_inspections,
+            "critical_priority_count": self.critical_priority_count,
+            "high_priority_count": self.high_priority_count,
+            "medium_priority_count": self.medium_priority_count,
+            "low_priority_count": self.low_priority_count,
+            "overall_observed_issue_rate": self.overall_observed_issue_rate,
+            "active_manufacturers_tracked": self.active_manufacturers_tracked,
+            "top_violated_requirements": list(self.top_violated_requirements),
+            "generated_at": self.generated_at,
+        }
