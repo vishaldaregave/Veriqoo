@@ -12,16 +12,21 @@ begin
   ) then
     alter table public.legal_rules
       add column embedding extensions.vector(3072);
-  elsif (
-    select format_type(a.atttypid, a.atttypmod)
-    from pg_attribute a
-    join pg_class c on c.oid = a.attrelid
-    join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
-      and c.relname = 'legal_rules'
-      and a.attname = 'embedding'
-      and not a.attisdropped
-  ) <> 'vector(3072)' then
+  elsif not exists (
+    select 1
+    from pg_attribute column_row
+    join pg_class table_row on table_row.oid = column_row.attrelid
+    join pg_namespace table_namespace on table_namespace.oid = table_row.relnamespace
+    join pg_type type_row on type_row.oid = column_row.atttypid
+    join pg_namespace type_namespace on type_namespace.oid = type_row.typnamespace
+    where table_namespace.nspname = 'public'
+      and table_row.relname = 'legal_rules'
+      and column_row.attname = 'embedding'
+      and not column_row.attisdropped
+      and type_namespace.nspname = 'extensions'
+      and type_row.typname = 'vector'
+      and column_row.atttypmod = 3072
+  ) then
     raise exception
       'public.legal_rules.embedding must be vector(3072) for gemini-embedding-001';
   end if;

@@ -1,0 +1,232 @@
+{
+  "direct_lookup": {
+    "tested": 5,
+    "successes": 5,
+    "accuracy_pct": 100.0
+  },
+  "relationship_expansion": {
+    "requirement_to_provision": {
+      "req_id": "d4250a63-109a-5395-bb3f-5f4682ff859d",
+      "expected_prov_id": "2",
+      "retrieved_prov_ids": [
+        "2"
+      ],
+      "passed": true
+    },
+    "provision_to_table": {
+      "passed": false
+    },
+    "provision_to_amendment": {
+      "prov_id": 2,
+      "expected_amendment_id": "56fa23ba-c432-5fcc-8cce-a2cc31eb3919",
+      "retrieved_amendment_ids": [
+        "56fa23ba-c432-5fcc-8cce-a2cc31eb3919",
+        "647d7a5c-2b60-5b92-a29a-713771ebb9ed",
+        "649cfb24-6193-59ac-9a1e-9fee8ce84437",
+        "74ece17a-bd34-5e8e-9df0-66533121bf75",
+        "84be2ef1-5d7b-5f57-9f09-366bde4321d9",
+        "aa726e67-0e2a-5be7-aab6-1a24eeedf35c",
+        "ad57ba29-11ab-5953-bd64-4d2a4b52d359",
+        "ad67e9ca-8ebb-5e54-8da6-cd64524e040b"
+      ],
+      "passed": true
+    }
+  },
+  "deduplication": {
+    "target_id": "d4250a63-109a-5395-bb3f-5f4682ff859d",
+    "instances": 1,
+    "methods": [
+      "requirement_lookup",
+      "semantic_vector"
+    ],
+    "passed": true
+  },
+  "provenance": {
+    "checked_sample": 1,
+    "all_valid": true
+  },
+  "completeness": {
+    "case1_partial_pass": true,
+    "case2_complete_pass": true
+  },
+  "benchmark": {
+    "total_cases": 8,
+    "executed_count": 0,
+    "blocked_by_rate_limit": 8,
+    "recall_1": null,
+    "recall_3": null,
+    "recall_5": null,
+    "recall_10": null,
+    "category_breakdown": {},
+    "cases": [
+      {
+        "case_id": "CASE-1",
+        "name": "Pilot 1: Manufacturer Identity & Address",
+        "category": "requirement",
+        "query": "Name and complete address of the manufacturer on pre-packaged commodities",
+        "expected_entity_type": "requirement",
+        "status": "BLOCKED_PROVIDER_RATE_LIMIT",
+        "empty_reason": "PROVIDER_ERROR: Gemini batch embedding failed after 2 attempts: Gemini batch embedding failed: HTTP 429: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/embed_content_free_tier_requests, limit: 1000, model: gemini-embedding-1.0\\nPlease retry in 9h48m52.464134807s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Learn more about Gemini API quotas\",\n            \"url\": \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.QuotaFailure\",\n        \"violations\": [\n          {\n            \"quotaMetric\": \"generativelanguage.googleapis.com/embed_content_free_tier_requests\",\n            \"quotaId\": \"EmbedContentRequestsPerDayPerProjectPerModel-FreeTier\",\n            \"quotaDimensions\": {\n              \"location\": \"global\",\n              \"model\": \"gemini-embedding-1.0\"\n            },\n            \"quotaValue\": \"1000\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.RetryInfo\",\n        \"retryDelay\": \"35332s\"\n      }\n    ]\n  }\n}\n",
+        "retrieved_count": 0,
+        "top_1": "None",
+        "top_3": [],
+        "top_5": [],
+        "top_10": [],
+        "hit_positions": [],
+        "retrieved": false,
+        "hit_r1": false,
+        "hit_r3": false,
+        "hit_r5": false,
+        "hit_r10": false,
+        "elapsed_ms": 6430.824599985499
+      },
+      {
+        "case_id": "CASE-2",
+        "name": "Pilot 2: Importer Identity & Country of Origin",
+        "category": "requirement",
+        "query": "Name and complete address of the importer and country of origin for imported packages",
+        "expected_entity_type": "requirement",
+        "status": "BLOCKED_PROVIDER_RATE_LIMIT",
+        "empty_reason": "PROVIDER_ERROR: Gemini batch embedding failed after 2 attempts: Gemini batch embedding failed: HTTP 429: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/embed_content_free_tier_requests, limit: 1000, model: gemini-embedding-1.0\\nPlease retry in 9h48m46.235668659s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Learn more about Gemini API quotas\",\n            \"url\": \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.QuotaFailure\",\n        \"violations\": [\n          {\n            \"quotaMetric\": \"generativelanguage.googleapis.com/embed_content_free_tier_requests\",\n            \"quotaId\": \"EmbedContentRequestsPerDayPerProjectPerModel-FreeTier\",\n            \"quotaDimensions\": {\n              \"location\": \"global\",\n              \"model\": \"gemini-embedding-1.0\"\n            },\n            \"quotaValue\": \"1000\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.RetryInfo\",\n        \"retryDelay\": \"35326s\"\n      }\n    ]\n  }\n}\n",
+        "retrieved_count": 0,
+        "top_1": "None",
+        "top_3": [],
+        "top_5": [],
+        "top_10": [],
+        "hit_positions": [],
+        "retrieved": false,
+        "hit_r1": false,
+        "hit_r3": false,
+        "hit_r5": false,
+        "hit_r10": false,
+        "elapsed_ms": 6222.121900005732
+      },
+      {
+        "case_id": "CASE-3",
+        "name": "Pilot 3: Chapter II Institutional / Wholesale Exemption",
+        "category": "provision",
+        "query": "Chapter II applicability exemption for packages containing commodities exceeding 25 kg or 25 litre or industrial consumers",
+        "expected_entity_type": "provision",
+        "status": "BLOCKED_PROVIDER_RATE_LIMIT",
+        "empty_reason": "PROVIDER_ERROR: Gemini batch embedding failed after 2 attempts: Gemini batch embedding failed: HTTP 429: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/embed_content_free_tier_requests, limit: 1000, model: gemini-embedding-1.0\\nPlease retry in 9h48m39.997210478s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Learn more about Gemini API quotas\",\n            \"url\": \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.QuotaFailure\",\n        \"violations\": [\n          {\n            \"quotaMetric\": \"generativelanguage.googleapis.com/embed_content_free_tier_requests\",\n            \"quotaId\": \"EmbedContentRequestsPerDayPerProjectPerModel-FreeTier\",\n            \"quotaDimensions\": {\n              \"location\": \"global\",\n              \"model\": \"gemini-embedding-1.0\"\n            },\n            \"quotaValue\": \"1000\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.RetryInfo\",\n        \"retryDelay\": \"35319s\"\n      }\n    ]\n  }\n}\n",
+        "retrieved_count": 0,
+        "top_1": "None",
+        "top_3": [],
+        "top_5": [],
+        "top_10": [],
+        "hit_positions": [],
+        "retrieved": false,
+        "hit_r1": false,
+        "hit_r3": false,
+        "hit_r5": false,
+        "hit_r10": false,
+        "elapsed_ms": 6247.157400008291
+      },
+      {
+        "case_id": "CASE-4",
+        "name": "Pilot 4: Small Package Exemption (10g or 10ml)",
+        "category": "provision",
+        "query": "Exemption in respect of certain packages where net weight or measure is 10 gram or 10 millilitre or less",
+        "expected_entity_type": "provision",
+        "status": "BLOCKED_PROVIDER_RATE_LIMIT",
+        "empty_reason": "PROVIDER_ERROR: Gemini batch embedding failed after 2 attempts: Gemini batch embedding failed: HTTP 429: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/embed_content_free_tier_requests, limit: 1000, model: gemini-embedding-1.0\\nPlease retry in 9h48m33.814824577s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Learn more about Gemini API quotas\",\n            \"url\": \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.QuotaFailure\",\n        \"violations\": [\n          {\n            \"quotaMetric\": \"generativelanguage.googleapis.com/embed_content_free_tier_requests\",\n            \"quotaId\": \"EmbedContentRequestsPerDayPerProjectPerModel-FreeTier\",\n            \"quotaDimensions\": {\n              \"model\": \"gemini-embedding-1.0\",\n              \"location\": \"global\"\n            },\n            \"quotaValue\": \"1000\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.RetryInfo\",\n        \"retryDelay\": \"35313s\"\n      }\n    ]\n  }\n}\n",
+        "retrieved_count": 0,
+        "top_1": "None",
+        "top_3": [],
+        "top_5": [],
+        "top_10": [],
+        "hit_positions": [],
+        "retrieved": false,
+        "hit_r1": false,
+        "hit_r3": false,
+        "hit_r5": false,
+        "hit_r10": false,
+        "elapsed_ms": 6172.102499986067
+      },
+      {
+        "case_id": "CASE-5",
+        "name": "Pilot 5: Maximum Retail Price & Unit Sale Price",
+        "category": "requirement",
+        "query": "Maximum retail price declaration inclusive of all taxes and unit sale price per gram or millilitre",
+        "expected_entity_type": "requirement",
+        "status": "BLOCKED_PROVIDER_RATE_LIMIT",
+        "empty_reason": "PROVIDER_ERROR: Gemini batch embedding failed after 2 attempts: Gemini batch embedding failed: HTTP 429: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/embed_content_free_tier_requests, limit: 1000, model: gemini-embedding-1.0\\nPlease retry in 9h48m27.600355159s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Learn more about Gemini API quotas\",\n            \"url\": \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.QuotaFailure\",\n        \"violations\": [\n          {\n            \"quotaMetric\": \"generativelanguage.googleapis.com/embed_content_free_tier_requests\",\n            \"quotaId\": \"EmbedContentRequestsPerDayPerProjectPerModel-FreeTier\",\n            \"quotaDimensions\": {\n              \"model\": \"gemini-embedding-1.0\",\n              \"location\": \"global\"\n            },\n            \"quotaValue\": \"1000\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.RetryInfo\",\n        \"retryDelay\": \"35307s\"\n      }\n    ]\n  }\n}\n",
+        "retrieved_count": 0,
+        "top_1": "None",
+        "top_3": [],
+        "top_5": [],
+        "top_10": [],
+        "hit_positions": [],
+        "retrieved": false,
+        "hit_r1": false,
+        "hit_r3": false,
+        "hit_r5": false,
+        "hit_r10": false,
+        "elapsed_ms": 6207.972100004554
+      },
+      {
+        "case_id": "CASE-6",
+        "name": "Schedule: Second Schedule Standard Quantities",
+        "category": "schedule_entry",
+        "query": "Commodities to be packed in specified standard quantities under the Second Schedule baby food biscuits cereals",
+        "expected_entity_type": "schedule_entry",
+        "status": "BLOCKED_PROVIDER_RATE_LIMIT",
+        "empty_reason": "PROVIDER_ERROR: Gemini batch embedding failed after 2 attempts: Gemini batch embedding failed: HTTP 429: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/embed_content_free_tier_requests, limit: 1000, model: gemini-embedding-1.0\\nPlease retry in 9h48m21.357440847s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Learn more about Gemini API quotas\",\n            \"url\": \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.QuotaFailure\",\n        \"violations\": [\n          {\n            \"quotaMetric\": \"generativelanguage.googleapis.com/embed_content_free_tier_requests\",\n            \"quotaId\": \"EmbedContentRequestsPerDayPerProjectPerModel-FreeTier\",\n            \"quotaDimensions\": {\n              \"location\": \"global\",\n              \"model\": \"gemini-embedding-1.0\"\n            },\n            \"quotaValue\": \"1000\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.RetryInfo\",\n        \"retryDelay\": \"35301s\"\n      }\n    ]\n  }\n}\n",
+        "retrieved_count": 0,
+        "top_1": "None",
+        "top_3": [],
+        "top_5": [],
+        "top_10": [],
+        "hit_positions": [],
+        "retrieved": false,
+        "hit_r1": false,
+        "hit_r3": false,
+        "hit_r5": false,
+        "hit_r10": false,
+        "elapsed_ms": 6254.992500005756
+      },
+      {
+        "case_id": "CASE-7",
+        "name": "Table: Maximum Permissible Error on Net Quantity",
+        "category": "table",
+        "query": "Table Maximum permissible errors on net quantities declared by weight or by volume First Schedule",
+        "expected_entity_type": "table",
+        "status": "BLOCKED_PROVIDER_RATE_LIMIT",
+        "empty_reason": "PROVIDER_ERROR: Gemini batch embedding failed after 2 attempts: Gemini batch embedding failed: HTTP 429: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/embed_content_free_tier_requests, limit: 1000, model: gemini-embedding-1.0\\nPlease retry in 9h48m15.139276728s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Learn more about Gemini API quotas\",\n            \"url\": \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.QuotaFailure\",\n        \"violations\": [\n          {\n            \"quotaMetric\": \"generativelanguage.googleapis.com/embed_content_free_tier_requests\",\n            \"quotaId\": \"EmbedContentRequestsPerDayPerProjectPerModel-FreeTier\",\n            \"quotaDimensions\": {\n              \"location\": \"global\",\n              \"model\": \"gemini-embedding-1.0\"\n            },\n            \"quotaValue\": \"1000\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.RetryInfo\",\n        \"retryDelay\": \"35295s\"\n      }\n    ]\n  }\n}\n",
+        "retrieved_count": 0,
+        "top_1": "None",
+        "top_3": [],
+        "top_5": [],
+        "top_10": [],
+        "hit_positions": [],
+        "retrieved": false,
+        "hit_r1": false,
+        "hit_r3": false,
+        "hit_r5": false,
+        "hit_r10": false,
+        "elapsed_ms": 6237.735599977896
+      },
+      {
+        "case_id": "CASE-8",
+        "name": "Amendment: Digital Declarations & QR Codes",
+        "category": "amendment",
+        "query": "Legal Metrology Packaged Commodities GSR amendment digital declarations e-commerce platform QR code",
+        "expected_entity_type": "amendment",
+        "status": "BLOCKED_PROVIDER_RATE_LIMIT",
+        "empty_reason": "PROVIDER_ERROR: Gemini batch embedding failed after 2 attempts: Gemini batch embedding failed: HTTP 429: {\n  \"error\": {\n    \"code\": 429,\n    \"message\": \"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \\n* Quota exceeded for metric: generativelanguage.googleapis.com/embed_content_free_tier_requests, limit: 1000, model: gemini-embedding-1.0\\nPlease retry in 9h48m8.932043919s.\",\n    \"status\": \"RESOURCE_EXHAUSTED\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.Help\",\n        \"links\": [\n          {\n            \"description\": \"Learn more about Gemini API quotas\",\n            \"url\": \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.QuotaFailure\",\n        \"violations\": [\n          {\n            \"quotaMetric\": \"generativelanguage.googleapis.com/embed_content_free_tier_requests\",\n            \"quotaId\": \"EmbedContentRequestsPerDayPerProjectPerModel-FreeTier\",\n            \"quotaDimensions\": {\n              \"location\": \"global\",\n              \"model\": \"gemini-embedding-1.0\"\n            },\n            \"quotaValue\": \"1000\"\n          }\n        ]\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.RetryInfo\",\n        \"retryDelay\": \"35288s\"\n      }\n    ]\n  }\n}\n",
+        "retrieved_count": 0,
+        "top_1": "None",
+        "top_3": [],
+        "top_5": [],
+        "top_10": [],
+        "hit_positions": [],
+        "retrieved": false,
+        "hit_r1": false,
+        "hit_r3": false,
+        "hit_r5": false,
+        "hit_r10": false,
+        "elapsed_ms": 6182.749600033276
+      }
+    ]
+  }
+}

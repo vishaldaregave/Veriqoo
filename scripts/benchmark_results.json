@@ -1,0 +1,136 @@
+{
+  "total_test_cases": 11,
+  "recall_1": 72.72727272727273,
+  "recall_3": 72.72727272727273,
+  "recall_5": 72.72727272727273,
+  "recall_10": 72.72727272727273,
+  "direct_recall": 100.0,
+  "expansion_recall": 0.0,
+  "deduplication_violations": 0,
+  "category_recall": {
+    "requirement": 100.0,
+    "provision": 100.0,
+    "schedule_entry": 0.0,
+    "table": 0.0,
+    "amendment": 0.0
+  },
+  "latency": {
+    "mean_ms": 16495.340272726025,
+    "min_ms": 1445.4451000201516,
+    "p50_ms": 6431.341300019994,
+    "p95_ms": 47363.59749996336,
+    "max_ms": 47363.59749996336
+  },
+  "results": [
+    {
+      "name": "Pilot 1: Manufacturer Identity & Address",
+      "category": "pilot_rule",
+      "hit_r1": true,
+      "hit_r3": true,
+      "hit_r5": true,
+      "hit_r10": true,
+      "total_retrieved": 10,
+      "elapsed_ms": 7306.790800008457
+    },
+    {
+      "name": "Pilot 2: Importer Identity & Country of Origin",
+      "category": "pilot_rule",
+      "hit_r1": true,
+      "hit_r3": true,
+      "hit_r5": true,
+      "hit_r10": true,
+      "total_retrieved": 10,
+      "elapsed_ms": 6694.191199960187
+    },
+    {
+      "name": "Pilot 3: Chapter II Applicability & Institutional Exemption",
+      "category": "pilot_rule",
+      "hit_r1": true,
+      "hit_r3": true,
+      "hit_r5": true,
+      "hit_r10": true,
+      "total_retrieved": 10,
+      "elapsed_ms": 5999.235199997202
+    },
+    {
+      "name": "Pilot 4: Small Package Exemption (10g or 10ml)",
+      "category": "pilot_rule",
+      "hit_r1": true,
+      "hit_r3": true,
+      "hit_r5": true,
+      "hit_r10": true,
+      "total_retrieved": 10,
+      "elapsed_ms": 6281.9732000352815
+    },
+    {
+      "name": "Pilot 5: Maximum Retail Price & Unit Sale Price",
+      "category": "pilot_rule",
+      "hit_r1": true,
+      "hit_r3": true,
+      "hit_r5": true,
+      "hit_r10": true,
+      "total_retrieved": 10,
+      "elapsed_ms": 6431.341300019994
+    },
+    {
+      "name": "Schedule: Second Schedule Standard Quantities",
+      "category": "schedule_entry",
+      "hit_r1": false,
+      "hit_r3": false,
+      "hit_r5": false,
+      "hit_r10": false,
+      "total_retrieved": 0,
+      "elapsed_ms": 46681.268999993335
+    },
+    {
+      "name": "Table: Maximum Permissible Error on Net Quantity",
+      "category": "table",
+      "hit_r1": false,
+      "hit_r3": false,
+      "hit_r5": false,
+      "hit_r10": false,
+      "total_retrieved": 0,
+      "elapsed_ms": 47363.59749996336
+    },
+    {
+      "name": "Amendment: E-Commerce Declarations & QR Codes",
+      "category": "amendment",
+      "hit_r1": false,
+      "hit_r3": false,
+      "hit_r5": false,
+      "hit_r10": false,
+      "total_retrieved": 0,
+      "elapsed_ms": 46669.47540000547
+    },
+    {
+      "name": "Direct Lookup: Requirement d4250a63",
+      "category": "direct_lookup",
+      "hit_r1": true,
+      "hit_r3": true,
+      "hit_r5": true,
+      "hit_r10": true,
+      "total_retrieved": 1,
+      "elapsed_ms": 3637.8145999624394
+    },
+    {
+      "name": "Direct Lookup: Requirement f7b766c5",
+      "category": "direct_lookup",
+      "hit_r1": true,
+      "hit_r3": true,
+      "hit_r5": true,
+      "hit_r10": true,
+      "total_retrieved": 1,
+      "elapsed_ms": 2937.6097000204027
+    },
+    {
+      "name": "Direct Lookup: Provision 6 (Rule 6 Declarations)",
+      "category": "direct_lookup",
+      "hit_r1": true,
+      "hit_r3": true,
+      "hit_r5": true,
+      "hit_r10": true,
+      "total_retrieved": 1,
+      "elapsed_ms": 1445.4451000201516
+    }
+  ]
+}
