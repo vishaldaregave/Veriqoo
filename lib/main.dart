@@ -4,10 +4,13 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'screens/dashboard/authority_cases_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/dashboard/inspections_screen.dart';
 import 'screens/dashboard/products_screen.dart';
+import 'screens/dashboard/report_violation_dialog.dart';
 import 'services/compliance_analysis.dart';
+import 'services/consumer_issue_api_service.dart';
 import 'services/gemini_ai_analysis_service.dart';
 import 'services/legal_rules_retrieval_service.dart';
 import 'services/supabase_service.dart';
@@ -42,6 +45,7 @@ class LegalCheckApp extends StatelessWidget {
       routes: {
         '/': (_) => const HomeScreen(),
         '/dashboard': (_) => const DashboardScreen(),
+        '/authority/cases': (_) => const AuthorityCasesScreen(),
         '/inspections': (_) => const InspectionsScreen(),
         '/products': (_) => const ProductsScreen(),
       },
@@ -662,12 +666,40 @@ class AnalysisResultScreen extends StatelessWidget {
     required this.ocrText,
     this.primaryImage,
     this.imageUrl,
+    this.inspectionId,
+    this.apiService,
   });
 
   final ComplianceAnalysis analysis;
   final String ocrText;
   final XFile? primaryImage;
   final String? imageUrl;
+  final String? inspectionId;
+  final ConsumerIssueApiService? apiService;
+
+  Future<void> _reportViolation(BuildContext context) async {
+    final clientService = apiService ?? ConsumerIssueApiService();
+    final token = clientService.getToken();
+    if (token == null || token.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Authentication required. Please sign in to report a violation.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    showDialog<ConsumerIssueReport>(
+      context: context,
+      builder: (_) => ReportViolationDialog(
+        analysis: analysis,
+        inspectionId: inspectionId,
+        ocrText: ocrText,
+        apiService: clientService,
+      ),
+    );
+  }
 
   Future<void> _saveReport(BuildContext context) async {
     try {
@@ -841,6 +873,29 @@ class AnalysisResultScreen extends StatelessWidget {
                   onPressed: () => _saveReport(context),
                   icon: const Icon(Icons.cloud_upload_outlined),
                   label: const Text('Save Inspection Report'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton.icon(
+                  key: const Key('report_violation_button'),
+                  onPressed: () => _reportViolation(context),
+                  icon: const Icon(Icons.report_problem_outlined, color: Color(0xFFC53929)),
+                  label: const Text(
+                    'Report Violation to Legal Metrology',
+                    style: TextStyle(
+                      color: Color(0xFFC53929),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFC53929), width: 1.5),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
               ),
             ],

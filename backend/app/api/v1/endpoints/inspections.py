@@ -34,6 +34,7 @@ from backend.app.api.schemas import (
     ImageUploadResponse,
     InspectionEvidenceSummaryResponse,
     InspectionImageResponse,
+    InspectionListResponse,
     InspectionReportResponse,
     InspectionResponse,
     QRPayloadResponse,
@@ -184,6 +185,34 @@ def create_inspection(
 
     session = store.create_session(metadata=meta, owner_id=current_user.user_id)
     return _serialize_session(session)
+
+
+@router.get(
+    "",
+    response_model=InspectionListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="List Consumer Scan History",
+    description="Retrieve paginated list of previous inspection sessions owned by the authenticated caller in reverse-chronological order.",
+)
+def list_my_inspections(
+    limit: int = Query(20, ge=1, le=100, description="Number of inspections to return (1-100)"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    store: InMemoryInspectionStore = Depends(get_session_store),
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> InspectionListResponse:
+    """Retrieve caller's scan history with reverse-chronological ordering and pagination."""
+    sessions, total = store.list_sessions_by_owner(
+        owner_id=current_user.user_id,
+        limit=limit,
+        offset=offset,
+    )
+    items = [_serialize_session(s) for s in sessions]
+    return InspectionListResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(

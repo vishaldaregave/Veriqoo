@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any
 
 from fastapi import HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -157,7 +158,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         code=ErrorCode.INVALID_REQUEST,
         message="Request validation failed.",
-        details={"validation_errors": exc.errors()},
+        details={"validation_errors": jsonable_encoder(exc.errors())},
     )
 
 
@@ -173,6 +174,8 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
             code = ErrorCode.INSPECTION_NOT_FOUND.value
         elif exc.status_code == 400:
             code = ErrorCode.INVALID_REQUEST.value
+        elif exc.status_code == 403:
+            code = ErrorCode.FORBIDDEN.value
         elif exc.status_code == 409:
             code = ErrorCode.INVALID_INSPECTION_STATE.value
         elif exc.status_code == 413:

@@ -61,6 +61,16 @@ class InspectionRepository(abc.ABC):
         pass
 
     @abc.abstractmethod
+    def list_inspections_by_owner(
+        self,
+        owner_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[Inspection], int]:
+        """List active inspections owned by specific user with reverse-chronological ordering and pagination."""
+        pass
+
+    @abc.abstractmethod
     def update_inspection_status(
         self,
         inspection_id: str,
@@ -254,6 +264,22 @@ class InMemoryInspectionRepository(InspectionRepository):
                     details={"inspection_id": inspection_id},
                 )
             return self._inspections[inspection_id]
+
+    def list_inspections_by_owner(
+        self,
+        owner_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[Inspection], int]:
+        with self._lock:
+            matched = [
+                insp for insp in self._inspections.values()
+                if insp.owner_id == owner_id or insp.metadata.get("owner_id") == owner_id
+            ]
+            matched.sort(key=lambda x: x.created_at, reverse=True)
+            total = len(matched)
+            paginated = matched[offset : offset + limit]
+            return paginated, total
 
     def update_inspection_status(
         self,
@@ -580,6 +606,26 @@ class SupabaseInspectionRepository(InspectionRepository):
             metadata=row_meta,
             owner_id=row.get("owner_id") or row_meta.get("owner_id"),
         )
+
+    def list_inspections_by_owner(
+        self,
+        owner_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[Inspection], int]:
+        rows = self._request(
+            "get",
+            "inspection_sessions",
+            params={
+                "metadata->>owner_id": f"eq.{owner_id}",
+                "order": "created_at.desc",
+                "offset": str(offset),
+                "limit": str(limit),
+            },
+            headers=self._headers(),
+        )
+        inspections = [self.get_inspection(str(r["id"])) for r in rows if "id" in r]
+        return inspections, len(inspections)
 
     def update_inspection_status(
         self,

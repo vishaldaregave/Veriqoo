@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Generator
+from fastapi import Depends
 
 from fastapi import Depends
 

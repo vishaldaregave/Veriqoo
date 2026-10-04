@@ -108,6 +108,10 @@ def create_app() -> FastAPI:
     app.include_router(voice_router, prefix="/api/v1")
     app.include_router(authority_router, prefix="/api/v1")
     app.include_router(telegram_link_router, prefix="/api/v1")
+    app.include_router(users_router, prefix="/api/v1")
+    app.include_router(saved_products_router, prefix="/api/v1")
+    app.include_router(consumer_issues_router, prefix="/api/v1")
+    app.include_router(authority_router, prefix="/api/v1")
 
     return app
 
