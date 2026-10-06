@@ -1,0 +1,42 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "id": "deferred-build-test-gates",
+      "title": "Gates 3 (flutter build web, both targets) and 4 (flutter test) were never executed",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "blocking": false,
+      "description": "The workspace permission policy denies `flutter *` for every actor (coder, reviewer, orchestrator), so `flutter build web` (default target and `-t lib/gallery_main.dart`) and `flutter test` could not be run. Static Gates 1-2 passed via the permitted `dart` equivalents (`dart pub get` resolved; `dart analyze` = No issues found!), which covers compilation of the whole app and the test file. But runtime behavior of the guard/redirect/nav and the ScanScreen mount, plus the web build (incl. ML Kit's unconditional `dart:io` under dart2js), are compiled-but-unverified. The orchestrator decided to finalize Phase 2 on the static bar; this gate is not something the coding agent can close in this environment.",
+      "action": "A human or CI with `flutter` permitted must run (cwd apps/user_app): `flutter build web`, `flutter build web -t lib/gallery_main.dart`, and `flutter test` to close Gates 3 and 4. The widget test test/app_shell_test.dart is in place for this."
+    },
+    {
+      "id": "write-scope-mtime-not-diff",
+      "title": "Write scope verified by modification time, not a clean per-phase diff",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "blocking": false,
+      "description": "The entire monorepo (apps/, packages/, .agents/, final_schema.sql) is uncommitted/untracked against `main`, which still holds the pre-restructure root-level app, so `git diff main` cannot isolate Phase 2 from the earlier scaffolding. Verified via file modification times instead: all user_app shell source was written 00:47-01:21; shared_core's newest source is prior-day 23:53 (untouched by this phase); admin_web shows 05-10 timestamps only on pub metadata (pubspec.yaml 00:21:39, pubspec.lock 00:21:52, .dart_tool/*), ~26 min before the Phase 2 window and attributable to earlier setup, not source logic. No source file outside apps/user_app/** was modified by this phase. The shared_core READ-ONLY constraint holds; gallery_main.dart is untouched (23:51).",
+      "action": "No action required for Phase 2. If strict provable isolation is needed later, commit phase boundaries so a clean diff exists, and confirm admin_web/pubspec.yaml matches its Phase-1 baseline."
+    },
+    {
+      "id": "retrieval-service-gemini-key",
+      "title": "LegalRulesRetrievalService now receives the dotenv-first Gemini key where the original passed none",
+      "severity": "non-blocking",
+      "confidence": "confirmed",
+      "blocking": false,
+      "description": "In the carried /scan pipeline, analyzeProduct() constructs LegalRulesRetrievalService(apiKey: <dotenv-first Gemini key>), whereas the original main.dart constructed LegalRulesRetrievalService() with no arguments. Reading the service (shared_core, read-only) confirms this is a safe superset: its constructor defaults apiKey to the same `const String.fromEnvironment('GEMINI_API_KEY', defaultValue: '')`, it guards an empty key before classifying, and the scan screen wraps retrieveLegalContext in try/catch with a Gemini fallback. Because .env carries GEMINI_API_KEY, RAG retrieval now actually receives a key in normal runs instead of an empty dart-define default. Consistent with the plan's dotenv-first Gemini key decision; not a regression.",
+      "action": "None required. Informational — noting the behavioral delta from the original for the record."
+    },
+    {
+      "id": "notfound-relative-import",
+      "title": "Relative import in the 404 screen",
+      "severity": "nit",
+      "confidence": "confirmed",
+      "blocking": false,
+      "description": "lib/app/not_found_screen.dart imports `'routes.dart'` relatively while every other file in the app uses absolute `package:flutter_application_1/...` imports. Purely a consistency nit; `dart analyze` is clean.",
+      "action": "Optional: change to `import 'package:flutter_application_1/app/routes.dart';` for consistency."
+    }
+  ],
+  "reviewDoc": "c:\\WorkSpace\\Ajinkya\\Veriqoo\\.agents\\tasks\\veriqoo-user-app-shell-phase2\\phase2-review.md"
+}

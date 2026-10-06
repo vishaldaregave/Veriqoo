@@ -1,0 +1,76 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "summary": {
+    "high": 0,
+    "medium": 3,
+    "nit": 5,
+    "groundTruthErrors": 0
+  },
+  "findings": [
+    {
+      "id": 1,
+      "severity": "MEDIUM",
+      "title": "flutter_web_plugins imported directly but not declared, failing the §19 analyze-clean gate",
+      "location": "§5.3, §18 (main.dart import) vs §18 (pubspec), §19",
+      "problem": "§5.3/§18 add a direct import of package:flutter_web_plugins/url_strategy.dart for usePathUrlStrategy(), but §18's pubspec change adds only supabase_flutter and lucide_icons_flutter. flutter_web_plugins is currently only a transitive SDK package (confirmed in apps/admin_web/pubspec.lock). By the design's own M1 reasoning, a directly-imported package must be a declared dependency or depend_on_referenced_packages fires under flutter_lints, which breaks the §19 'flutter analyze clean' gate (the app still builds since it resolves transitively).",
+      "fix": "Add flutter_web_plugins: { sdk: flutter } to apps/admin_web/pubspec.yaml and to the §18 Modify list, mirroring how M1 declares supabase_flutter."
+    },
+    {
+      "id": 2,
+      "severity": "MEDIUM",
+      "title": "No-direct-lucide-import constraint resolved only by an interpretation the design defers to the approver",
+      "location": "§2 (Icons), §12 (R3·#3), §18 (pubspec adds lucide_icons_flutter)",
+      "problem": "The task constraint is 'VeriqooIcons facade, no lucide direct import.' AdminIcons adds a direct lucide_icons_flutter dependency and a direct import in foundations/admin_icons.dart. The design argues this meets the rule under a single-importer-facade reading but explicitly labels it 'flagged for sign-off' (§12). A named constraint whose interpretation is deferred to the approver is an open decision, not a settled design: a literal reading would change §2, §12, and §18. The design's supporting facts are accurate (shared_core's VeriqooIcons is documented in-source as the sole lucide importer; the 15-glyph facade lacks the needed control-center glyphs).",
+      "fix": "Approver makes the call and the design records it as resolved. Option A (recommended): ratify the single-importer-facade interpretation (AdminIcons as the sole admin lucide importer, mirroring VeriqooIcons) and change §12 wording from 'flagged for sign-off' to 'approved'. Option B (literal): no lucide in admin_web — re-skin §12 onto Material Icons.* or escalate extending VeriqooIcons in shared_core (which breaches read-only/write-scope and needs separate approval)."
+    },
+    {
+      "id": 3,
+      "severity": "MEDIUM",
+      "title": "Right detail-panel lifecycle across navigation unspecified; always-mock panel content not in the DEMO-badge list",
+      "location": "§4.1, §8, §9, §10.4, §10.5",
+      "problem": "detailPanelProvider is shell-level state owned by AdminShell (the ShellRoute builder), so it survives route changes, but the design never says an open panel closes on navigation. Opening a mock case panel on /cases then navigating to /inspections would leave the mock CaseRecord panel docked over the LIVE table. For the <768 full-screen Dialog variant (§8), nothing states that barrier/back dismissal funnels to DetailPanelController.close(), so the provider can hold stale state. Both payloads (manufacturer, caseRecord) are always mock, yet §9's badge list omits the detail panel, so a mock panel over a live route lacks a DEMO marker — brushing the §9/§11 'mock never presented as live' invariant.",
+      "fix": "Specify in §4.1/§8: (a) AdminShell listens to the router location and calls detailPanelProvider.notifier.close() on any route change (or renders the panel only on /cases and /manufacturers); (b) every dismissal path of the narrow full-screen Dialog routes through close(); (c) add the detail panel to §9's badge list — the _ManufacturerDetailView/_CaseDetailView header carries AdminMockBadge since both payloads are mock."
+    },
+    {
+      "id": 4,
+      "severity": "NIT",
+      "title": "inspectionByIdProvider relied on but not declared in the provider inventory or manifest",
+      "location": "§5.3, §14, §17 reference it; §6.1 and §18 (data/providers.dart) omit it",
+      "problem": "The detail screen 'watches inspectionByIdProvider(id)' and §14/§17 reference it, but the family provider wrapping the inspectionById(String id) repo method is never formally declared, leaving its type/shape implicit.",
+      "fix": "Declare it in §6.1 and §18, e.g. final inspectionByIdProvider = FutureProvider.family<InspectionRow?, String>((ref, id) => ref.read(inspectionsRepositoryProvider).inspectionById(id)); and note it returns null (not AsyncError) on the A1-false / not-found path per §6.1/§5.3/R3·#10."
+    },
+    {
+      "id": 5,
+      "severity": "NIT",
+      "title": "NotifierProvider<String> notation is not instantiable; UI-state notifier classes unnamed",
+      "location": "§4.2, §6.1 (inspectionsSearchProvider and the status/sort/page/pageSize/view-mode notifiers)",
+      "problem": "Riverpod NotifierProvider takes two type args <NotifierT, StateT>; NotifierProvider<String> is invalid (String is not a Notifier). Only the detail-panel provider is spelled correctly (NotifierProvider<DetailPanelController, AdminDetailPayload?>). The other UI-state notifiers name no Notifier subclass, conflating class and state type.",
+      "fix": "Name each controller and both type args, e.g. class InspectionsSearch extends Notifier<String> { @override String build() => ''; } final inspectionsSearchProvider = NotifierProvider<InspectionsSearch, String>(InspectionsSearch.new); and likewise for status filter, sort spec, page, pageSize, cases view mode."
+    },
+    {
+      "id": 6,
+      "severity": "NIT",
+      "title": "Loading-state wording conflicts between §10 and §3.1/§6.2",
+      "location": "§10 vs §3.1 and §6.2",
+      "problem": "§10 says loading uses 'VeriqooLoading-style skeletons', but §3.1 says VeriqooLoading is 'not used in admin' and §6.2 says 'VeriqooLoading-free skeleton rows'. Source confirms VeriqooLoading is the branded verification-scan panel (VerificationScan motif), not a skeleton, so the §10 phrasing is misleading and could lead an implementer to use an atom the design forbids.",
+      "fix": "In §10 replace 'VeriqooLoading-style skeletons' with 'static skeleton placeholders (admin does not use the VeriqooLoading scan-motif atom — see §3.1/§6.2)'. Keep VeriqooEmptyState/VeriqooErrorState for empty/error."
+    },
+    {
+      "id": 7,
+      "severity": "NIT",
+      "title": "Inspections status filter (3-way) misaligned with the 4-way status cell; null rows unfilterable",
+      "location": "§10.2 (filter All|Compliant|Violation) vs §6.4 (4-way cell)",
+      "problem": "The cell maps to four outcomes (VERIFIED/FLAG/NOT DETECTED/VIOLATION) but the filter stays binary over is_compliant. A FLAG row (is_compliant=false, only missing info) is swept into the Violation filter, and a NOT DETECTED row (is_compliant == null, R3·#14) matches neither Compliant (==true) nor Violation (==false), appearing only under All. The filter cannot isolate the two new states.",
+      "fix": "Either document that the filter is intentionally binary over is_compliant and null rows surface only under All, or widen the filter to the four VeriqooStatusKind values so the toolbar matches the cell."
+    },
+    {
+      "id": 8,
+      "severity": "NIT",
+      "title": "Products Status (latest inspection) and Violations (summed across all) can contradict",
+      "location": "§10.4",
+      "problem": "ProductAggregate carries the latest row's status but a summed issue count across all inspections for the group (carried forward from today's products_screen.dart). A product whose latest inspection is compliant can show VERIFIED next to a non-zero Violations count; the richer 4-way status makes the mismatch more visible than today's binary status.",
+      "fix": "Optional clarification: state in §10.4 that Status reflects only the latest inspection while Violations is cumulative, or derive Status from the aggregate (e.g. worst-case across the group) so the columns agree."
+    }
+  ],
+  "reviewDoc": "c:\\WorkSpace\\Ajinkya\\Veriqoo\\.agents\\tasks\\veriqoo-admin-phase11/admin-design-review.md"
+}

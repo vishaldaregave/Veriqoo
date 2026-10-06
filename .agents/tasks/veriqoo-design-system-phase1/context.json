@@ -1,0 +1,31 @@
+{
+  "project_type": "Flutter monorepo: apps/user_app (mobile+web app, pubspec name 'flutter_application_1') and apps/admin_web (leave untouched), both depending on packages/shared_core via a path dependency.",
+  "language": "Dart (Flutter)",
+  "build_system": "Flutter SDK 3.47.4 / Dart 3.13.3 on PATH. shared_core SDK constraint ^3.0.0; user_app ^3.9.2. shared_core/pubspec.yaml currently has NO flutter: section, NO dev_dependencies, NO analysis_options.yaml, NO test/ dir — these must be added. user_app has web, windows, android, ios, linux, macos platform folders enabled.",
+  "test_framework": "flutter_test (widget tests). user_app already has flutter_test dev dep and apps/user_app/test/. Add gallery_test.dart there.",
+  "build_command": "flutter build web -t lib/gallery_main.dart  (run in apps/user_app; web is configured. Fallbacks: flutter build windows / flutter build apk --debug)",
+  "test_command": "flutter test  (run in apps/user_app)",
+  "verification_instructions": "1) flutter --version (toolchain present — confirmed 3.47.4). 2) flutter pub get in packages/shared_core AND apps/user_app. 3) flutter analyze in both -> 0 errors, minimal warnings. 4) flutter build web -t lib/gallery_main.dart in apps/user_app. 5) flutter test in apps/user_app (pumps DesignGallery + VeriqooButton/VeriqooScore/VeriqooStatus/VeriqooScannerOverlay, asserts takeException() isNull). 6) Confirm Inter + IBM Plex Mono render (bundled TTF assets present and VeriqooType families use the packages/shared_core/<Family> prefix; not Roboto fallback).",
+  "snapshot_or_generated_files": "None checked in. flutter build web produces apps/user_app/build/ (gitignored); do not commit build output.",
+  "environment_constraints": "Work DIRECTLY in c:\\WorkSpace\\Ajinkya\\Veriqoo (NO git worktree). Do NOT commit anything. PowerShell on Windows. Flutter on PATH. Font downloads use Invoke-WebRequest to raw.githubusercontent.com/google/fonts.",
+  "contribution_requirements": "HARD PRESERVATION: packages/shared_core/lib/services/{compliance_analysis,gemini_ai_analysis_service,legal_rules_retrieval_service,supabase_service}.dart must stay byte-identical. Do NOT change apps/user_app/lib/main.dart behavior (add the gallery as a SEPARATE entrypoint apps/user_app/lib/gallery_main.dart). Do NOT add go_router, riverpod, or bloc. Monochrome only; zero green; no gradients; no glassmorphism (one translucent token ok); hairlines over shadows (one soft-shadow token for floating nav+modals only); radius strictly per tokens; full reduced-motion support; 44x44 min targets; Semantics labels; visible focus; dark AND light both complete.",
+  "key_patterns": "Tokens via ThemeExtension<VeriqooTokens> attached to ThemeData.extensions, read with Theme.of(context).extension<VeriqooTokens>()!. No state-management package — gallery theme toggle uses local setState. Single barrel export design_system.dart. Raw icon package imported ONLY in VeriqooIcons facade. Fonts bundled in shared_core and referenced via family prefix 'packages/shared_core/Inter' and 'packages/shared_core/IBMPlexMono'. Mono styles use FontFeature.tabularFigures(). Status encoded by shape+glyph+label (never color). Business models ComplianceAnalysis/ComplianceIssue imported from package:shared_core/services/compliance_analysis.dart for gallery mock data.",
+  "relevant_files": [
+    "packages/shared_core/pubspec.yaml (modify: add icon dep, dev_deps, flutter: section + bundled fonts)",
+    "packages/shared_core/analysis_options.yaml (create)",
+    "packages/shared_core/lib/design_system/design_system.dart (barrel)",
+    "packages/shared_core/lib/design_system/theme/* (colors, tokens, typography, spacing, radius, elevation, motion, theme)",
+    "packages/shared_core/lib/design_system/foundations/veriqoo_icons.dart",
+    "packages/shared_core/lib/design_system/painters/* (8 painters)",
+    "packages/shared_core/lib/design_system/motif/verification_scan.dart",
+    "packages/shared_core/lib/design_system/components/* (16 components)",
+    "packages/shared_core/lib/design_system/gallery/{mock_data,design_gallery}.dart",
+    "packages/shared_core/lib/services/compliance_analysis.dart (READ ONLY - models for mock data; PRESERVE)",
+    "apps/user_app/lib/gallery_main.dart (create)",
+    "apps/user_app/lib/main.dart (READ ONLY - do not change behavior)",
+    "apps/user_app/test/gallery_test.dart (create)",
+    "apps/user_app/pubspec.yaml (path dep on shared_core; leave as-is unless google_fonts fallback)",
+    ".agents/tasks/veriqoo-design-system-phase1/plan.md (full plan with exact token values, scales, component/painter lists)"
+  ],
+  "directory_structure": "packages/shared_core/lib/{services (preserve), design_system (new: theme/, foundations/, components/, painters/, motif/, gallery/, design_system.dart)}; apps/user_app/lib/{main.dart (preserve), gallery_main.dart (new), screens/ (empty)}; apps/user_app/test/{widget_test.dart (placeholder), compliance_analysis_test.dart, gallery_test.dart (new)}. Full token values, typography/spacing/radius/motion scales, component status encodings, painter list, motif spec, gallery contents, dependency strategy, and verification sequence are in .agents/tasks/veriqoo-design-system-phase1/plan.md."
+}

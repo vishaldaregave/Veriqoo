@@ -23,6 +23,7 @@ from backend.app.services.evidence.models import (
     ImageFormat,
     IngestionConfig,
 )
+from backend.app.services.evidence.enhancement import enhance_for_ocr
 from backend.app.services.evidence.normalization import (
     encode_normalized_image,
     normalize_color,
@@ -89,6 +90,10 @@ class ImageIngestionService:
 
         # 6. Color normalization (standard RGB)
         color_img = normalize_color(oriented_img)
+
+        
+        # 6.5 Apply OCR Enhancement for blur and low contrast
+        color_img = enhance_for_ocr(color_img)
 
         # 7. Dimension normalization (aspect-ratio preserving downscale)
         norm_img, was_resized = normalize_dimensions(color_img, self.config)

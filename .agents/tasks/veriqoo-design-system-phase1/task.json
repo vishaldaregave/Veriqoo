@@ -1,0 +1,7 @@
+{
+  "task_id": "task-veriqoo-design-system-phase1",
+  "task_description": "Build Phase 1 of the VERIQOO redesign: a centralized monochrome design system at packages/shared_core/lib/design_system/ (tokens via ThemeExtension, typography, spacing, radius, elevation, motion, 16 components, 8 background painters, the Verification-Scan signature motif, VeriqooIcons facade, barrel export) with bundled Inter + IBM Plex Mono fonts, plus a runnable Design Gallery (apps/user_app/lib/gallery_main.dart) rendering every token and component in both dark and light themes. Preserve packages/shared_core/lib/services/ byte-for-byte; do not change apps/user_app/lib/main.dart behavior; add no go_router/riverpod/bloc.",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003", "FEAT-004"],
+  "blocked_reason": null
+}

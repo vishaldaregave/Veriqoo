@@ -1,0 +1,54 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "The 16 monochrome COMPONENTS under components/, built on FEAT-001 tokens/type/motion/icons and the FEAT-002 motif. Includes VeriqooStatus with the four zero-color shape+glyph+label encodings, VeriqooScore radial+count-up, VeriqooInspectionCard editorial ledger row, VeriqooAppBar with auto-hidden back, floating VeriqooNavigationBar. Enforces 44x44 targets, Semantics labels, visible focus, radius per tokens. Depends on FEAT-001 and FEAT-002. Grounded in plan.md Components + status-encoding sections.",
+  "status": "completed",
+  "steps": [
+    "Read context.json and plan.md (Components + Status encodings) FIRST.",
+    "Create components/veriqoo_button.dart (primary=inverse fill, secondary=hairline outline, ghost=text-only; size enum; disabled + loading states; press scale-down via VeriqooMotion.press, no overshoot; min 44x44; Semantics label).",
+    "Create components/veriqoo_icon_button.dart (44x44 min, Semantics label).",
+    "Create components/veriqoo_text_field.dart (animated focus underline via VeriqooMotion, label, error state, hairline default border).",
+    "Create components/veriqoo_app_bar.dart (implements PreferredSizeWidget; left back auto-hidden when Navigator.canPop==false; center title; right action).",
+    "Create components/veriqoo_navigation_bar.dart (floating, softShadow token, four destinations Home/Scan/History/Profile with Scan emphasized, subtle active indicator, monochrome line icons from VeriqooIcons, radius sm).",
+    "Create components/veriqoo_section_header.dart, components/veriqoo_divider.dart (hairline from borderHairline token).",
+    "Create components/veriqoo_status.dart + VeriqooStatusKind enum: VERIFIED=solid filled square + check glyph + label 'VERIFIED'; FLAG=diagonal-hatch outlined square + label 'FLAG'; MISSING=dashed outlined square + label 'NOT DETECTED'; VIOLATION=inverted solid high-contrast block + label 'VIOLATION'; radius none; Semantics label = status word.",
+    "Create components/veriqoo_score.dart (monochrome radial ring painter + count-up to value e.g. 87, shows '87/100' in mono tabular; reduced-motion jumps to final).",
+    "Create components/veriqoo_inspection_card.dart (editorial LEDGER ROW: inspection ID + timestamp in mono, product, score, status chip, hairline separators, radius none; NOT a floating rounded card).",
+    "Create components/veriqoo_bottom_sheet.dart (surfaceRaised, radius md top, show() helper), components/veriqoo_modal.dart (surfaceRaised, radius md, softShadow, show() helper).",
+    "Create components/veriqoo_loading.dart (uses VerificationScan motif), components/veriqoo_empty_state.dart, components/veriqoo_error_state.dart, components/veriqoo_scanner_overlay.dart (four corner markers + thin scanning line + sample OCR boxes with tiny field labels, built on VerificationScan).",
+    "Add export lines for all 16 components to design_system.dart."
+  ],
+  "acceptance_criteria": [
+    "All 16 components exist and are exported from design_system.dart.",
+    "VeriqooStatus renders the four statuses with distinct shape+glyph+label and never relies on color.",
+    "Interactive components meet 44x44 min and expose Semantics labels; focus is visible.",
+    "`flutter analyze` in packages/shared_core reports 0 errors."
+  ],
+  "verification": [
+    "cd packages/shared_core; flutter analyze (expect 0 errors)"
+  ],
+  "blocked_reason": null,
+  "findings": {
+    "verification": "flutter analyze in packages/shared_core -> No issues found! (0 errors). Did NOT commit. services/ untouched.",
+    "exports": "All 16 components re-exported from packages/shared_core/lib/design_system/design_system.dart under a `// Components.` block. Import via package:shared_core/design_system/design_system.dart.",
+    "component_apis": {
+      "VeriqooButton": "VeriqooButton({required String label, VoidCallback? onPressed, VeriqooButtonVariant variant = primary, VeriqooButtonSize size = medium, IconData? icon, bool loading = false, bool expand = false, String? semanticLabel}). enum VeriqooButtonVariant{primary,secondary,ghost}; enum VeriqooButtonSize{small(44),medium(48),large(56)}. onPressed null OR loading => disabled.",
+      "VeriqooIconButton": "VeriqooIconButton({required IconData icon, required String semanticLabel, VoidCallback? onPressed, VeriqooIconButtonVariant variant = ghost, double iconSize = 20, double size = 44}). enum VeriqooIconButtonVariant{ghost,outline}. size clamped to >=44.",
+      "VeriqooTextField": "VeriqooTextField({TextEditingController? controller, String? label, String? hintText, String? helperText, String? errorText, bool obscureText=false, TextInputType? keyboardType, TextInputAction? textInputAction, bool enabled=true, ValueChanged<String>? onChanged, ValueChanged<String>? onSubmitted, FocusNode? focusNode, IconData? prefixIcon, IconData? suffixIcon}). errorText!=null => error state.",
+      "VeriqooAppBar": "VeriqooAppBar({required String title, Widget? action, VoidCallback? onBack, bool showBack=true, double height=56}) implements PreferredSizeWidget. Back auto-hidden when Navigator.canPop==false; defaults to Navigator.maybePop.",
+      "VeriqooNavigationBar": "VeriqooNavigationBar({required int currentIndex, required ValueChanged<int> onDestinationSelected, List<VeriqooNavigationDestination> destinations = VeriqooNavigationDestination.defaults}). VeriqooNavigationDestination({required IconData icon, required String label, bool emphasized=false}); .defaults = Home/Scan(emphasized)/History/Profile.",
+      "VeriqooSectionHeader": "VeriqooSectionHeader({required String title, String? subtitle, Widget? action}). title rendered uppercase meta.",
+      "VeriqooDivider": "VeriqooDivider({double? height, double indent=0, double endIndent=0}) and VeriqooDivider.vertical({...}). Hairline from borderHairline token.",
+      "VeriqooStatus": "VeriqooStatus({required VeriqooStatusKind kind, double markerSize=16, bool showLabel=true}). enum VeriqooStatusKind{verified,flag,missing,violation}; extension getter .label => VERIFIED/FLAG/NOT DETECTED/VIOLATION. Shape+glyph+label only, Semantics label = status word.",
+      "VeriqooScore": "VeriqooScore({required int value, int maxValue=100, double size=120, double strokeWidth=6, Duration duration=VeriqooMotion.cinematic, String? caption}). Radial ring + count-up; reduced-motion jumps to final; readout '<value>/<maxValue>' in mono tabular.",
+      "VeriqooInspectionCard": "VeriqooInspectionCard({required String inspectionId, required String timestamp, required String product, required int score, required VeriqooStatusKind status, int maxScore=100, VoidCallback? onTap}). Hairline ledger row, radius none.",
+      "VeriqooBottomSheet": "VeriqooBottomSheet({required Widget child, String? title}); static Future<T?> VeriqooBottomSheet.show<T>(BuildContext context, {required Widget child, String? title, bool isScrollControlled=false}).",
+      "VeriqooModal": "VeriqooModal({required String title, required Widget child, List<Widget> actions=const[], bool showClose=true}); static Future<T?> VeriqooModal.show<T>(BuildContext context, {required String title, required Widget child, List<Widget> actions=const[], bool showClose=true, bool barrierDismissible=true}).",
+      "VeriqooLoading": "VeriqooLoading({String message='Verifying', Size size=const Size(220,180)}). Built on VerificationScan.",
+      "VeriqooEmptyState": "VeriqooEmptyState({required IconData icon, required String title, String? message, Widget? action}).",
+      "VeriqooErrorState": "VeriqooErrorState({String title='Something went wrong', String? message, VoidCallback? onRetry, String retryLabel='Retry', IconData icon=VeriqooIcons.alert}). Retry button shown when onRetry!=null.",
+      "VeriqooScannerOverlay": "VeriqooScannerOverlay({Widget? child, String? hint='Align the label within the frame', bool enabled=true, List<ScanField> fields=VerificationScan.defaultFields}). Built on VerificationScan; use ScanField(Rect, {String? label}) for custom OCR targets."
+    },
+    "notes": "Interactive components (button, icon button, nav item, inspection card) use FocusableActionDetector for a visible 2px focus ring + keyboard Activate. All meet 44x44 min targets. No go_router/riverpod/bloc added. Monochrome only (tokens-driven). VeriqooStatus verified uses VeriqooIcons.check glyph, violation uses VeriqooIcons.close glyph on inverted block."
+  }
+}

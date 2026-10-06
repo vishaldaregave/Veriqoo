@@ -1,0 +1,31 @@
+{
+  "id": "FEAT-004",
+  "type": "feat",
+  "description": "Design GALLERY + runnable entrypoint + widget test + full verification. DesignGallery screen (dark/light toggle, renders every token and component), realistic Indian mock data building real ComplianceAnalysis/ComplianceIssue instances, the separate apps/user_app/lib/gallery_main.dart entrypoint, and the widget test. Depends on FEAT-001/002/003. Grounded in plan.md Gallery + Verification sections.",
+  "status": "completed",
+  "steps": [
+    "Read context.json and plan.md (Design Gallery + Verification) FIRST.",
+    "Create gallery/mock_data.dart: product 'Organic Wheat Biscuits', MRP 'Rs.120', Net Quantity '200 g', manufacturer 'ABC Foods Pvt. Ltd.', inspection ID 'VRQ-20261004-0182', OCR 'OCR 98.2%', scores like 87/100; build real ComplianceAnalysis/ComplianceIssue from package:shared_core/services/compliance_analysis.dart with mixed statuses.",
+    "Create gallery/design_gallery.dart: DesignGallery stateful screen with dark/light toggle (local setState, no state package) showing color swatches (both schemes), full type ramp, spacing scale, radius samples, all four status chips, every VeriqooButton variant+state, text fields, VeriqooAppBar, VeriqooNavigationBar, animated VeriqooScore, several VeriqooInspectionCard rows, VeriqooLoading, empty + error states, VeriqooScannerOverlay, each background painter in a bounded preview.",
+    "Add gallery exports to design_system.dart.",
+    "Create apps/user_app/lib/gallery_main.dart: own main() -> runApp(MaterialApp(theme: VeriqooTheme.dark, darkTheme/light driven by the toggle, home: DesignGallery())). Import ONLY package:shared_core/design_system/design_system.dart. Do NOT touch apps/user_app/lib/main.dart.",
+    "Create apps/user_app/test/gallery_test.dart: pump DesignGallery and at least VeriqooButton, VeriqooScore, VeriqooStatus, VeriqooScannerOverlay inside MaterialApp(theme: VeriqooTheme.dark); await tester.pump(const Duration(seconds: 1)); expect(tester.takeException(), isNull).",
+    "Run the full verification sweep (see verification) and confirm Inter + IBM Plex Mono resolve (bundled TTF assets present + VeriqooType families use the packages/shared_core prefix, or GoogleFonts wired in fallback; FontManifest lists the fonts), and that packages/shared_core/lib/services/ is byte-identical (git diff empty on that path)."
+  ],
+  "acceptance_criteria": [
+    "`flutter analyze` in packages/shared_core AND apps/user_app reports 0 errors.",
+    "`flutter build web -t lib/gallery_main.dart` in apps/user_app succeeds (record exact command; fallback flutter build windows / apk --debug).",
+    "`flutter test` in apps/user_app passes including the new gallery_test.dart (no exceptions).",
+    "Inter + IBM Plex Mono render (not Roboto fallback).",
+    "packages/shared_core/lib/services/ unchanged; apps/user_app/lib/main.dart behavior unchanged."
+  ],
+  "verification": [
+    "cd packages/shared_core; flutter analyze",
+    "cd apps/user_app; flutter analyze",
+    "cd apps/user_app; flutter build web -t lib/gallery_main.dart",
+    "cd apps/user_app; flutter test",
+    "git -C c:/WorkSpace/Ajinkya/Veriqoo diff --stat -- packages/shared_core/lib/services (expect no output)"
+  ],
+  "blocked_reason": null,
+  "findings": "Implemented gallery/mock_data.dart (realistic Indian data building real ComplianceAnalysis/ComplianceIssue from package:shared_core/services/compliance_analysis.dart: hero 'Organic Wheat Biscuits', MRP 'Rs.120', 200 g, 'ABC Foods Pvt. Ltd.', ID 'VRQ-20261004-0182', 'OCR 98.2%', 87/100, plus compliant/violation/missing rows for mixed statuses) and gallery/design_gallery.dart (DesignGallery stateful screen; dark/light toggle via local setState + inner Theme; renders color swatches both schemes, type ramp, spacing, radius, all 4 status chips, every button variant/state/size, text fields, app bar, nav bar, animated score, inspection ledger, loading, empty+error states, scanner overlay, all 8 background painters). Exported both from design_system.dart barrel. Created apps/user_app/lib/gallery_main.dart (separate entrypoint, MaterialApp with VeriqooTheme.dark/light, home DesignGallery; main.dart untouched) and apps/user_app/test/gallery_test.dart (pumps DesignGallery + VeriqooButton/VeriqooScore/VeriqooStatus x4/VeriqooScannerOverlay, pump(1s), takeException() isNull). Also repaired a pre-existing dangling import in apps/user_app/test/compliance_analysis_test.dart (was 'package:flutter_application_1/services/compliance_analysis.dart', which no longer exists after the monorepo restructure; repointed to 'package:shared_core/services/compliance_analysis.dart') so apps/user_app analyze has 0 errors. VERIFICATION: `flutter analyze` in packages/shared_core = No issues found; in apps/user_app = 0 errors (only 3 pre-existing info-level avoid_print lints in main.dart, not touched). EXACT PASSING BUILD COMMAND: `flutter build web -t lib/gallery_main.dart` (run in apps/user_app) -> Built build/web, exit 0. `flutter test` in apps/user_app = All tests passed (5: 3 pre-existing compliance + 2 new gallery). Fonts: build/web/assets/FontManifest.json lists family 'packages/shared_core/Inter' and 'packages/shared_core/IBMPlexMono' (Regular w400 + Medium w500) -> Inter + IBM Plex Mono resolve, not Roboto. `git diff --stat -- packages/shared_core/lib/services` empty (services untouched). Not committed."
+}

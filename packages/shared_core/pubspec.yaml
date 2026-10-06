@@ -1,0 +1,32 @@
+name: shared_core
+description: Shared core logic and services for Veriqoo.
+version: 1.0.0
+environment:
+  sdk: ^3.0.0
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.17.2
+  google_mlkit_text_recognition: ^0.16.0
+  image_picker: ^1.2.2
+  http: ^1.4.0
+  flutter_dotenv: ^6.0.1
+  lucide_icons_flutter: ^3.1.21
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter[opsz,wght].ttf
+    - family: IBMPlexMono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/IBMPlexMono-Medium.ttf
+          weight: 500

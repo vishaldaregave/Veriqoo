@@ -1,0 +1,55 @@
+{
+  "verdict": "APPROVED",
+  "summary": "All six acceptance checks pass. The acceptance bar is met on the recorded evidence (dart pub get success, dart analyze 0 issues); the three orchestrator decisions are applied as written; the live-vs-mock boundary matches the classification exactly with structural isolation and complete DEMO badging; the live Supabase queries are preserved verbatim (confirmed by direct comparison against the superseded screens) behind the repository + Riverpod seam; write scope holds for the Phase 11 work (no commits, no worktree, shared_core untouched); and the three required widget tests (shell, Dashboard, Case Management) are present and behaviorally on-point. All findings are non-blocking.",
+  "checks": {
+    "a_acceptance_bar": "PASS — phase11-verification.md records `Got dependencies!` and `No issues found!`; 9->4->2->0 trajectory matches the plan. Not re-run per step contract.",
+    "b_orchestrator_decisions": "PASS — (1) flutter_web_plugins SDK dep + usePathUrlStrategy() primary path kept (analyze clean, no fallback); (2) AdminIcons is the sole lucide_icons_flutter importer (grep-confirmed); (3) detail panel clears on primary-route change (post-frame close, test-asserted) and every mock surface incl. both in-panel mock detail views is DEMO-badged.",
+    "c_live_vs_mock_boundary": "PASS — LIVE: dashboard KPIs/charts/Top Violations/Recent Inspections, Inspections, Inspection Details, Products. MOCK: Cases/Kanban/Map, Inspector Assignment, Audit Logs, RBAC, Manufacturers, region map. Mock isolated under lib/data/mock with its own providers; no live repo or live providers file imports mock; never shown un-badged.",
+    "d_supabase_wiring_preserved": "PASS — InspectionsRepository/ProductsRepository reproduce the old screens' table/columns(13)/filters/limits(50/200/500)/ordering byte-for-byte (verified via git show HEAD of the superseded screens); injectable SupabaseClient + independent Riverpod providers; guarded idempotent init; shared_core SupabaseService untouched.",
+    "e_write_scope": "PASS (for Phase 11 work) — no commits (HEAD unchanged, nothing staged), no worktree, shared_core untouched (newest edit predates the build), admin_web self-contained. See finding F5 for a non-blocking user_app mtime observation.",
+    "f_required_widget_tests": "PASS — test/widgets/{admin_shell_test, dashboard_test, case_management_test}.dart all present with the correct behavioral assertions; network-free harness overrides every live provider."
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "title": "Test suite present and analyze-clean but unexecuted",
+      "severity": "info",
+      "blocking": false,
+      "confidence": "confirmed",
+      "detail": "Only `dart analyze` ran; `flutter test`, `flutter test --update-goldens`, and `flutter build web` are blocked by the workspace `flutter *` deny and deferred to CI/human. The suite's runtime pass/fail is unproven. Consistent with the agreed toolchain-constrained acceptance bar."
+    },
+    {
+      "id": "F2",
+      "title": "Golden tests ship without reference PNGs",
+      "severity": "info",
+      "blocking": false,
+      "confidence": "confirmed",
+      "detail": "test/golden/charts_golden_test.dart has no baseline images; a plain `flutter test` will fail until `flutter test --update-goldens` is run first. Sequence documented in the verification evidence."
+    },
+    {
+      "id": "F3",
+      "title": "Fake-SupabaseClient repository execution test deferred",
+      "severity": "info",
+      "blocking": false,
+      "confidence": "confirmed",
+      "detail": "The design's preferred fake-client query-shape assertion is replaced by public column/limit constants plus pure-transform unit tests. The verbatim-preservation risk it was meant to cover was instead discharged by direct comparison against the superseded screens in this review. Add the fake-client test when `flutter test` is runnable."
+    },
+    {
+      "id": "F4",
+      "title": "No auth/authorization; anon-key reads; RBAC non-enforcing",
+      "severity": "warning",
+      "blocking": false,
+      "confidence": "confirmed",
+      "detail": "Network-exposed regulatory-data surface shipping without access control. Explicitly out of Phase 11 scope and surfaced in both design (section 13) and verification, with the remediation path recorded (Supabase Auth via go_router redirect guard + RLS). Must not be deployed to a public origin with production data until that lands."
+    },
+    {
+      "id": "F5",
+      "title": "user_app working-tree edits post-date this step's session",
+      "severity": "info",
+      "blocking": false,
+      "confidence": "possible",
+      "detail": "Six apps/user_app/lib/** source files were modified at 03:41-03:43, after the coder's last admin_web write (widget_test.dart, 03:34:56) and the verification doc (03:37:56). Not attributable to the Phase 11 coder and belonging to an unrelated app; the whole monorepo is untracked so git cannot produce a per-step diff. Flagged for the orchestrator to confirm cross-task isolation in the shared uncommitted tree; not a defect in this implementation."
+    }
+  ],
+  "reviewDoc": "c:\\WorkSpace\\Ajinkya\\Veriqoo\\.agents\\tasks\\veriqoo-admin-phase11\\phase11-impl-review.md"
+}

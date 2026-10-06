@@ -29,7 +29,17 @@ def get_ingestion_service() -> ImageIngestionService:
 
 def get_pipeline_orchestrator() -> InspectionPipelineOrchestrator:
     """Provide the Phase 7 unified end-to-end inspection orchestrator."""
-    return InspectionPipelineOrchestrator()
+    from backend.app.services.ocr.extractor import OCRExtractor
+    from backend.app.services.applicability.service import ApplicabilityService
+    from backend.app.services.legal_rag.service import LegalRetrievalService
+    from backend.app.services.gemini.service import GeminiEvidenceService
+
+    return InspectionPipelineOrchestrator(
+        ocr_engine=OCRExtractor(),
+        applicability_service=ApplicabilityService(),
+        rag_service=LegalRetrievalService(),
+        gemini_service=GeminiEvidenceService()
+    )
 
 
 def get_app_settings() -> Settings:

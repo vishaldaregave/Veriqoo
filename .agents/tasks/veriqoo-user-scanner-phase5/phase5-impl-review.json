@@ -1,0 +1,42 @@
+{
+  "verdict": "APPROVED",
+  "findings": [
+    {
+      "label": "Live-OCR path not widget-tested",
+      "confidence": "likely",
+      "blocking": false,
+      "detail": "Every scanner_screen_test case uses liveOcr: false, so the stream -> setLiveOcr -> DetectionBoxesOverlay wiring and live-driven phase advancement are never mounted, despite FakeScanCameraController already supporting canned frames. Add one liveOcr: true widget test replaying frames and asserting the overlay plus a non-initial phase caption."
+    },
+    {
+      "label": "Flash UI can desync from hardware",
+      "confidence": "confirmed",
+      "blocking": false,
+      "detail": "_toggleFlash sets _flashOn via setState unconditionally, but CameraPackageController.setFlash swallows a setFlashMode failure, so the toggle can read FLASH ON while the torch is off. Surface success/failure from setFlash (or re-read flashOn) and reflect actual state."
+    },
+    {
+      "label": "Evidence thumbnail re-reads bytes every rebuild",
+      "confidence": "confirmed",
+      "blocking": false,
+      "detail": "_EvidenceTile calls image.file.readAsBytes() inline in build, creating a fresh future each rebuild and re-decoding/flickering the thumbnail. Cache the decoded bytes."
+    },
+    {
+      "label": "Concurrent-capture guard missing",
+      "confidence": "possible",
+      "blocking": false,
+      "detail": "Capture button and + Add tile are gated by _busy (set only during analyze), not by an in-flight capture, so a fast double-tap can call takePicture() twice concurrently and surface a snackbar. Add a capture-in-progress flag."
+    },
+    {
+      "label": "startImageStream lacks post-await mounted recheck",
+      "confidence": "possible",
+      "blocking": false,
+      "detail": "In _initCamera, setState runs after startImageStream without re-checking mounted, so disposing mid-start could setState on a defunct state. Re-check mounted before the final setState."
+    },
+    {
+      "label": "shared_core/admin_web untouched not provable from git",
+      "confidence": "possible",
+      "blocking": false,
+      "detail": "The repo reorg left everything untracked, so there is no baseline diff to prove packages/shared_core and apps/admin_web were not edited. Verdict relies on the verification attestation plus the fact that all scanner writes are under apps/user_app; diff those trees against a known-good copy for certainty."
+    }
+  ],
+  "reviewDoc": "c:\\WorkSpace\\Ajinkya\\Veriqoo\\.agents\\tasks\\veriqoo-user-scanner-phase5\\phase5-impl-review.md"
+}
